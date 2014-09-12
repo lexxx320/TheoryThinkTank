@@ -27,7 +27,7 @@ Inductive graph : Type :=
 |emptyGraph : graph
 |newVertex : vvar -> graph -> graph
 |newEdge : edge -> graph -> graph
-|unionGraph : graph -> graph -> graph. 
+|gunion : graph -> graph -> graph. 
 
 (*environment (eta) mapping either boolean or vertex variables
 **to their respective values (true/false or a color)*)
@@ -63,7 +63,7 @@ Inductive coloring : @env colors -> graph -> nat -> Prop :=
                              coloring (consEnv A C1 (consEnv B C2 eta)) G C ->
                              coloring eta (newEdge (A, B) G) C
 |cgUnion : forall eta G1 G2 C, coloring eta G1 C -> coloring eta G2 C ->
-                        coloring eta (unionGraph G1 G2) C. 
+                        coloring eta (gunion G1 G2) C. 
              
 Fixpoint newV vs G :=
   match vs with
@@ -92,7 +92,7 @@ Inductive vars_to_clique : list (bvar * vvar * vvar * vvar) -> list bvar ->
          In (u,v,v',x) Gamma -> vars_to_clique Gamma Delta G1 ->
          connectX Gamma Delta v G2 -> connectX Gamma Delta v' G3 ->
          connectV Gamma Delta x G4 ->
-         vars_to_clique Gamma (x::Delta) (unionGraph G1 (unionGraph G2 (unionGraph G3 G4))). 
+         vars_to_clique Gamma (x::Delta) (gunion G1 (gunion G2 (gunion G3 G4))). 
 
 Inductive convFormula : list (bvar * vvar * vvar * vvar) -> list bvar ->
                         bformula -> graph -> Prop := 
@@ -103,7 +103,7 @@ Inductive convStack : list (bvar * vvar * vvar * vvar) -> list bvar ->
                       list bformula -> graph -> Prop :=
 |conv_base : forall Gamma Delta, convStack Gamma Delta nil emptyGraph
 |conv_cons : forall Gamma Delta K F G1 G2, convStack Gamma Delta K G1 -> convFormula Gamma Delta F G2 ->
-                              convStack Gamma Delta (F::K) (unionGraph G1 G2)
+                              convStack Gamma Delta (F::K) (gunion G1 G2)
 .
 
 (*Top Level Reduction (Gamma; Delta |- K o F => C C' G)*)
