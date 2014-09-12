@@ -2,7 +2,7 @@
 http://dl.acm.org/citation.cfm?id=976579
 *)
 
-Require Omega.   
+Require Export Omega.   
 Require Export Bool.
 Require Export List.
 Export ListNotations.
