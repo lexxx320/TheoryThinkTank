@@ -92,7 +92,7 @@ Inductive vars_to_clique : list (bvar * vvar * vvar * vvar) -> list bvar ->
          In (u,v,v',x) Gamma -> vars_to_clique Gamma Delta G1 ->
          connectX Gamma Delta v G2 -> connectX Gamma Delta v' G3 ->
          connectV Gamma Delta x G4 ->
-         vars_to_clique Gamma (x::Delta) (gunion G1 (gunion G2 (gunion G3 G4))). 
+         vars_to_clique Gamma (u::Delta) (gunion G1 (gunion G2 (gunion G3 G4))). 
 
 Inductive clique : list (bvar * vvar * vvar * vvar) -> list bvar ->
                    graph -> Prop :=
@@ -158,12 +158,28 @@ Proof.
   intros. induction H; omega. 
 Qed. 
 
+Theorem colorWeakening : forall eta G C, coloring eta G C -> coloring eta G (C+1). 
+Proof.
+  intros. induction H. 
+  {constructor. }
+  {apply cgVertex with (C' := C'). omega. assumption. }
+  {apply cgEdge with (C1:=C1)(C2:=C2); auto; omega. }
+  {apply cgUnion; auto. }
+Qed. 
 
+Fixpoint stackSAT eta s :=
+  match s with
+      |b::bs => SAT eta b /\ stackSAT eta bs 
+      |nil => True
+  end. 
 
-
-
-
-
+Theorem KColorNPC : forall Gamma Delta K F C eta C' G eta',
+                      reduce Gamma Delta K F C C' G ->
+                      (stackSAT eta K /\ SAT eta F <-> coloring eta' G C').
+Proof.
+  intros. split; intros. 
+  {generalize dependent eta'. induction H; intros. 
+   {
 
 
 
