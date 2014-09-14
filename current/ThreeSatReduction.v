@@ -2,14 +2,14 @@
 http://dl.acm.org/citation.cfm?id=976579
 *)
 
-Require Import Coq.Sets.Ensembles. 
+Require Export Coq.Sets.Ensembles. 
 Require Export Omega.             
 Require Export Bool.
 Require Export List.
 Export ListNotations.
 Require Export Arith.
 Require Export Arith.EqNat.  
-Require Import hetList. 
+Require Export hetList. 
 
 Definition bvar := nat. (*boolean variables*)
 Definition vvar := nat. (*vertex variables*)
@@ -40,11 +40,8 @@ Inductive graphWF (n:nat) : graph -> Prop :=
 |newEWF : forall v1 v2 G, graphWF n G -> v1 < n -> v2 < n -> graphWF n (newEdge v1 v2 G)
 |unionWF : forall G1 G2, graphWF n G1 -> graphWF n G2 -> graphWF n (gunion G1 G2). 
 
-(*environment (eta)*)
-Definition env (A:Type) (B:Type) := list (A * B). 
-
 (*Specificaion of SAT' satisfiability*)
-Inductive SAT' : env bvar bool -> bformula -> Prop :=
+Inductive SAT' : list (bvar * bool) -> bformula -> Prop :=
 |satp : forall eta u, In (u, true) eta -> SAT' eta (pos u)
 |satn : forall eta u, In (u, false) eta -> SAT' eta (neg u)
 |satConj : forall eta F1 F2, SAT' eta F1 -> SAT' eta F2 -> SAT' eta (conjForm F1 F2)
@@ -58,10 +55,15 @@ Fixpoint setVars n eta F :=
                (setVars n'' ((n'', false)::eta) F)
   end. 
 
+Inductive setVarsF (i:nat) : list (bvar * bool) -> bformula -> Prop :=
+|setVarsDoneF : forall eta F, i = 0 -> SAT' eta F -> setVarsF i eta F
+|setVarsConsF : forall eta F i', i = S i' -> setVarsF i' eta F -> setVarsF i ((i', false)::eta) F
+|setVarsconsT : forall eta F i', i = S i' -> setVarsF i' eta F -> setVarsF i ((i',true)::eta) F. 
+
 Definition SAT n F := setVars n nil F. 
 
 (*specification of graph coloring*)
-Inductive coloring : env vvar colors -> graph -> nat -> Prop :=
+Inductive coloring : list (vvar * colors) -> graph -> nat -> Prop :=
 |cgempty : forall eta C, coloring eta emptyGraph C 
 |cgEdge : forall eta C1 C2 C A B G, In (A, C1) eta -> In (B, C2) eta ->
                              C1 <= C -> C2 <= C -> C1 <> C2 -> coloring eta G C ->
@@ -179,7 +181,7 @@ Proof.
   intros. induction H; eauto. econstructor; eauto; omega. 
 Qed. 
 
-Fixpoint stackSAT eta s :=
+Fixpoint stackSAT (eta:list (bvar * bool)) s :=
   match s with
       |b::bs => SAT' eta b /\ stackSAT eta bs 
       |nil => True
@@ -197,108 +199,3 @@ Ltac invertHyp :=
       |H:exists x, ?e |- _ => inv H; try invertHyp
       |H:?x /\ ?y |- _ => inv H; try invertHyp
   end.
-
-Inductive cliqueConsistent Gamma eta S C : list vvar -> Prop :=
-|consConsistent : forall u (x:vvar) c Delta (v v' : vvar), 
-                    cliqueConsistent Gamma eta (Ensembles.Add colors S c) C Delta ->
-                    ~ Ensembles.In colors S c -> In (u,v,v',x) Gamma -> c <= C ->
-                    In (x, c) eta -> cliqueConsistent Gamma eta S C (u::Delta)
-|nilConsistent : cliqueConsistent Gamma eta S C nil. 
-                                
-Theorem cliqueColorable : forall Gamma eta Delta C G S, 
-                            cliqueConsistent Gamma eta S C Delta ->
-                            clique Gamma Delta G -> coloring eta G C. 
-Proof.
-  intros. genDeps {{ eta; C; S }}. induction H0; intros; auto. 
-  {constructor. inv H2. eauto. Admitted. 
-
-Theorem KColorNPC : forall Gamma Delta K F C eta C' G eta',
-                      reduce Gamma Delta K F C C' G ->
-                      (stackSAT eta K /\ SAT' eta F <-> coloring eta' G C').
-Proof.
-  intros. split; intros. 
-  {generalize dependent eta'. induction H; intros. 
-   {invertHyp. inv H2. apply IHreduce. simpl. auto. }
-   {constructor. admit. constructor.
-    eapply cliqueColorable with (Gamma := Gamma)(S := Empty_set colors)(Delta := Delta); auto. 
-    admit. 
-
-
-
-Theorem KColorNPC' : forall Gamma Delta K F C eta n C' G eta',
-                      Reduce F n ->
-                      (SAT n F <-> setVarsG (3 * n) eta' G C').
-Proof.
-
-
-Inductive uniqueColors (S:Ensemble colors) : env vvar colors -> Prop :=
-|uniqueNil : uniqueColors S nil
-|uniqueCons : forall x v l, uniqueColors (Add colors S v) l -> ~ Ensembles.In colors S v ->
-                       uniqueColors S ((x, v)::l)
-.
-
-Fixpoint consistent (Gamma:list (bvar * vvar * vvar * vvar)) eta :=
-  match Gamma with
-      |(u,v,v',x)::Gamma => (exists C:colors, In (x, C) eta) /\ consistent Gamma eta
-      |nil => True
-  end. 
-
-Theorem clique_color : forall n Gamma Delta G C eta, C >= n -> length eta = n -> uniqueColors (Empty_set colors) eta ->
-                                      consistent Gamma eta -> clique Gamma Delta G -> coloring eta G C. 
-Proof.
-  intros. generalize dependent eta. generalize dependent C. generalize dependent n.
-  induction H3; intros. 
-  {constructor. }
-  {constructor; eauto. 
-
-Theorem consistentIn : forall Gamma u v v' x eta, In (u,v,v',x) Gamma -> consistent Gamma eta -> exists C, In (x, C) eta. 
-Proof.
-  induction Gamma; intros. 
-  {inv H. }
-  {inv H. simpl in *. invertHyp. exists x1. auto. destruct a. destruct p. destruct p.  simpl in *. 
-   invertHyp. eauto. }
-Qed. 
-
-Theorem colorConnectX : forall n Gamma Delta G C x eta, C >= n -> length eta = n -> uniqueColors (Empty_set colors) eta ->
-                                         connectX Gamma Delta x G -> coloring eta G C. 
-Proof.
-  intros. genDeps {{ n; C; eta }}. induction H2; intros. 
-  {constructor. }
-  {
-
-
-clique_color : {C:nat} clique G -> coloring C G -> type.
-%mode clique_color +C +CV -CG.
-cliquec_base : clique_color z clique_# cg#.
-cliquec_cont : {R:relate _ _ _ X}
-                clique_color (s C) (clique_v R (D1 , D2) ^ V) (cgunion CG1 CG2)
-                <- clique_color C D1 CG1’
-                <- increase_color CG1’ CG1
-                <- store_color X (s C) CGX
-<- lemma5 E
-<- connectX_color C CGX E D2 CG2.
-
-
-case1t      : main_theorem C (c_new D) (satnewt E) F
-                     (cgvertex ([v] [cgv] (cgvertex ([v’][cgv’]
-                     (cgvertex ([x][cgx] (cgedge (CG v v’ x cgv cgv’ cgx)
-                               <=z H !=z2 cgv’ cgv)) H)) <=z)) H)
-                  <- ({u:v} {hypt: hyp u true}{v:vertex}{v’:vertex}{x:vertex}
-                      {r:relate u v v’ x}{var: var u}{cgv :colorvertex v (s C)}
-                      {cgv’:colorvertex v’ z}{cgx :colorvertex x (s C)}
-                      store_color v (s C) cgv -> store_color v’ z cgv’ ->
-                      store_color x (s C) cgx -> store_var u true hypt ->
-                      main_theorem (s C) (D u v v’ x r ^ var) (E u hypt) F
-                                                  (CG v v’ x cgv cgv’ cgx))
-                  <- ({u:v}{v:vertex}{v’:vertex}{x:vertex}
-                      {r:relate u v v’ x}{var: var u}
-                         conv_invariant (D u v v’ x r ^ var) H).
-
-
-
-
-
-
-
-
-

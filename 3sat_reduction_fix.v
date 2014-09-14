@@ -40,11 +40,8 @@ Inductive graphWF (n:nat) : graph -> Prop :=
 |newEWF : forall v1 v2 G, graphWF n G -> v1 < n -> v2 < n -> graphWF n (newEdge v1 v2 G)
 |unionWF : forall G1 G2, graphWF n G1 -> graphWF n G2 -> graphWF n (gunion G1 G2). 
 
-(*environment (eta)*)
-Definition env (A:Type) (B:Type) := list (A * B). 
-
 (*Specificaion of SAT' satisfiability*)
-Inductive SAT' : env bvar bool -> bformula -> Prop :=
+Inductive SAT' : list (bvar * bool) -> bformula -> Prop :=
 |satp : forall eta u, In (u, true) eta -> SAT' eta (pos u)
 |satn : forall eta u, In (u, false) eta -> SAT' eta (neg u)
 |satConj : forall eta F1 F2, SAT' eta F1 -> SAT' eta F2 -> SAT' eta (conjForm F1 F2)
@@ -58,10 +55,15 @@ Fixpoint setVars n eta F :=
                (setVars n'' ((n'', false)::eta) F)
   end. 
 
+Inductive setVarsF (i:nat) : list (bvar * bool) -> bformula -> Prop :=
+|setVarsDoneF : forall eta F, i = 0 -> SAT' eta F -> setVarsF i eta F
+|setVarsConsF : forall eta F i', i = S i' -> setVarsF i' eta F -> setVarsF i ((i', false)::eta) F
+|setVarsconsT : forall eta F i', i = S i' -> setVarsF i' eta F -> setVarsF i ((i',true)::eta) F. 
+
 Definition SAT n F := setVars n nil F. 
 
 (*specification of graph coloring*)
-Inductive coloring : env vvar colors -> graph -> nat -> Prop :=
+Inductive coloring : list (vvar * colors) -> graph -> nat -> Prop :=
 |cgempty : forall eta C, coloring eta emptyGraph C 
 |cgEdge : forall eta C1 C2 C A B G, In (A, C1) eta -> In (B, C2) eta ->
                              C1 <= C -> C2 <= C -> C1 <> C2 -> coloring eta G C ->
@@ -179,7 +181,7 @@ Proof.
   intros. induction H; eauto. econstructor; eauto; omega. 
 Qed. 
 
-Fixpoint stackSAT eta s :=
+Fixpoint stackSAT (eta:list (bvar * bool)) s :=
   match s with
       |b::bs => SAT' eta b /\ stackSAT eta bs 
       |nil => True
@@ -198,30 +200,102 @@ Ltac invertHyp :=
       |H:?x /\ ?y |- _ => inv H; try invertHyp
   end.
 
-Inductive cliqueConsistent Gamma eta S C : list vvar -> Prop :=
-|consConsistent : forall u (x:vvar) c Delta (v v' : vvar), 
-                    cliqueConsistent Gamma eta (Ensembles.Add colors S c) C Delta ->
-                    ~ Ensembles.In colors S c -> In (u,v,v',x) Gamma -> c <= C ->
-                    In (x, c) eta -> cliqueConsistent Gamma eta S C (u::Delta)
-|nilConsistent : cliqueConsistent Gamma eta S C nil. 
-                                
-Theorem cliqueColorable : forall Gamma eta Delta C G S, 
-                            cliqueConsistent Gamma eta S C Delta ->
-                            clique Gamma Delta G -> coloring eta G C. 
+Inductive valid Gamma C i : list (vvar * colors) -> list (bvar * bool) -> Prop :=
+|validF : forall u (v v' : vvar) x eta eta', 
+            valid Gamma C (S i) eta' eta -> i <= C -> In (u,v,v',x) Gamma ->
+            valid Gamma C i ((v,i)::(v',0)::(x,i)::eta')((u, true)::eta)
+|validT : forall u (v v' : vvar) x eta eta', 
+            valid Gamma C (S i) eta' eta -> i <= C -> In (u,v,v',x) Gamma ->
+            valid Gamma C i ((v,0)::(v',i)::(x,i)::eta') ((u, false)::eta)
+|validNil : valid Gamma C i nil nil.
+
+Inductive uniqueGraphEnv S : list (vvar * colors) -> Prop :=
+|rConsUnique : forall (x x' x'':vvar) (y y' y'':colors) l, 
+                 uniqueGraphEnv (Add colors S y'') l ->
+                 uniqueGraphEnv S ((x,y)::(x',y')::(x'',y'')::l)
+|rNilUnique : uniqueGraphEnv S nil. 
+
+
+Theorem AddComm : forall (U:Type) S i i', Add U (Add U S i) i' = Add U (Add U S i') i. 
 Proof.
-  intros. genDeps {{ eta; C; S }}. induction H0; intros; auto. 
-  {constructor. inv H2. eauto. Admitted. 
+  intros. apply Extensionality_Ensembles. unfold Same_set. unfold Included. 
+  split; intros. 
+  {inv H. inv H0. constructor. constructor. auto. inv H. unfold Add. 
+   apply Union_intror. constructor. inv H0. constructor. unfold Add. 
+   apply Union_intror. constructor. }
+  {inv H. inv H0. constructor. constructor. auto. inv H. unfold Add. 
+   apply Union_intror. constructor. inv H0. constructor. unfold Add. 
+   apply Union_intror. constructor. }
+Qed. 
+
+Theorem validUnique' : forall Gamma eta eta' C i U, 
+                        valid Gamma C (S i) eta' eta -> uniqueGraphEnv U eta' -> 
+                        uniqueGraphEnv (Add colors U i) eta'.
+Proof.
+  intros. generalize dependent U. induction H; intros. 
+  {constructor. rewrite AddComm. apply IHvalid. inv H2. auto. }
+  {inv H2. constructor. rewrite AddComm. eauto. }
+  {constructor. }
+Qed. 
+
+Theorem validUnique : forall Gamma eta eta' C S i, 
+                        valid Gamma C i eta' eta -> 
+                        uniqueGraphEnv S eta'. 
+Proof.
+  intros. induction H. 
+  {constructor. eapply validUnique'; eauto. }
+  {constructor. eapply validUnique'; eauto. }
+  {constructor. }
+Qed. 
+        
+Inductive domainsEq : list bvar -> list (bvar*vvar*vvar*vvar) -> Prop :=
+|eqCons : forall x a b c l l', domainsEq l l' -> domainsEq (x::l) ((x,a,b,c)::l')
+|eqNil : domainsEq nil nil. 
+
+(*asserts that Delta is a postfix of Domain(Gamma)*)
+Inductive domainPostfix : list bvar -> list (bvar*vvar*vvar*vvar) -> Prop :=
+|postfixCons : forall l l' hd, domainPostfix l l' -> domainPostfix l (hd::l')
+|postfixEq : forall l l', domainsEq l l' -> domainPostfix l l'. 
+
+Theorem postfixShorter : forall u Delta Gamma, domainPostfix (u::Delta) Gamma -> domainPostfix Delta Gamma. 
+Proof.
+  intros. remember(u::Delta). induction H. 
+  {constructor. auto. }{subst. inv H. apply postfixCons. apply postfixEq. auto. }
+Qed. 
+
+Theorem cliqueColorable : forall Gamma eta Delta C G eta', 
+                            valid Gamma C 1 eta' eta -> domainPostfix Delta Gamma -> 
+                            clique Gamma Delta G -> coloring eta' G C. 
+Proof.
+  intros. genDeps {{ eta; C }}. induction H1; intros; auto. 
+  {constructor. eapply IHclique; eauto. eapply postfixShorter. eauto. 
+   
+Ltac copy H := 
+  match type of H with
+      |?x => assert(x) by auto 
+  end. 
+
+Theorem connectXColorable : forall Gamma Delta G C eta eta' u v v' x, 
+                              valid Gamma C 1 eta' eta -> In (u,v,v',x) Gamma ->
+                              connectX Gamma Delta x G -> coloring eta' G C. 
+Proof.
+  intros. genDeps {{ u; v; v'; eta; C; eta'}}. induction H1; intros. 
+  {constructor. }
+  {copy H0. eapply validUnique with (S := Empty_set _) in H3. 
+
+
 
 Theorem KColorNPC : forall Gamma Delta K F C eta C' G eta',
-                      reduce Gamma Delta K F C C' G ->
+                      domainPostfix Delta Gamma -> reduce Gamma Delta K F C C' G -> 
+                      valid Gamma C' 1 eta' eta ->
                       (stackSAT eta K /\ SAT' eta F <-> coloring eta' G C').
 Proof.
   intros. split; intros. 
-  {generalize dependent eta'. induction H; intros. 
-   {invertHyp. inv H2. apply IHreduce. simpl. auto. }
+  {generalize dependent eta'. induction H0; intros. 
+   {invertHyp. inv H4. apply IHreduce; auto. simpl. auto. }
    {constructor. admit. constructor.
     eapply cliqueColorable with (Gamma := Gamma)(S := Empty_set colors)(Delta := Delta); auto. 
-    admit. 
+
 
 
 

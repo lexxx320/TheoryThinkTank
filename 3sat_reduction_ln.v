@@ -1,6 +1,8 @@
 (*This is an effort to reproduce the results presented in:
 http://dl.acm.org/citation.cfm?id=976579
-*)
+
+(Locally nameless representation)
+*) 
 
 Require Import Coq.Sets.Ensembles. 
 Require Export Omega.             
@@ -10,84 +12,106 @@ Export ListNotations.
 Require Export Arith.
 Require Export Arith.EqNat.  
 Require Import hetList. 
-
+ 
 Definition bvar := nat. (*boolean variables*)
 Definition vvar := nat. (*vertex variables*)
-Definition colors := nat. (*colors for graph vertices*) 
+Definition color := nat. (*colors for graph vertices*) 
 Definition edge : Type := prod vvar vvar. (*graph edges*)
-
+ 
 (*boolean formula (n is the number of variables*)
 Inductive bformula : Type :=
-|pos :  bvar -> bformula 
-|neg : bvar -> bformula
-|conjForm : bformula -> bformula -> bformula
-|disjForm : bformula -> bformula -> bformula. 
+|pos :  bvar -> bformula (*positive variables*)
+|neg : bvar -> bformula  (*negative variable (~ x)*)
+|const : bool -> bformula (*boolean constant*)
+|conjForm : bformula -> bformula -> bformula  (*conjunction*)
+|disjForm : bformula -> bformula -> bformula  (*disjunction*)
+|newVar : bformula -> bformula.     (*bind new variable (de bruijn index) *)
 
-Inductive bformulaWF (n:nat) : bformula -> Prop :=
-|posWF : forall x, x < n -> bformulaWF n (pos x)
-|negWF : forall x, x < n -> bformulaWF n (neg x)
-|conjWF : forall F1 F2, bformulaWF n F1 -> bformulaWF n F2 -> 
-                   bformulaWF n (conjForm F1 F2).
+Fixpoint openF k F (b:bool) := 
+  match F with
+      |pos x => if eq_nat_dec k x
+               then (const b)
+               else pos x
+      |neg x => if eq_nat_dec k x
+               then (const (negb b)) 
+               else neg x
+      |const b => const b
+      |conjForm F1 F2 => conjForm (openF k F1 b) (openF k F2 b)
+      |disjForm F1 F2 => disjForm (openF k F1 b) (openF k F2 b)
+      |newVar F' => openF (S k) F' b 
+  end. 
+
+(*local closure*)
+Inductive bformulaWF : bformula -> Prop :=
+|constWF : forall b, bformulaWF (const b)
+|conjWF : forall F1 F2, bformulaWF F1 -> bformulaWF F2 -> 
+                   bformulaWF (conjForm F1 F2)
+|disjWF : forall F1 F2, bformulaWF F1 -> bformulaWF F2 ->
+                   bformulaWF (disjForm F1 F2)
+|newWF : forall F,  bformulaWF (openF 0 F true) -> bformulaWF (newVar F). 
+
+Inductive node : Type := varNode : nat -> node | colorNode : nat -> node. 
 
 (*graph*)
 Inductive graph : Type :=
 |emptyGraph : graph
-|newEdge : vvar -> vvar -> graph -> graph
-|gunion : graph -> graph -> graph. 
+|newEdge : node -> node -> graph -> graph
+|gunion : graph -> graph -> graph
+|newVert : graph -> graph.  
 
-Inductive graphWF (n:nat) : graph -> Prop :=
-|emptyWF : graphWF n emptyGraph
-|newEWF : forall v1 v2 G, graphWF n G -> v1 < n -> v2 < n -> graphWF n (newEdge v1 v2 G)
-|unionWF : forall G1 G2, graphWF n G1 -> graphWF n G2 -> graphWF n (gunion G1 G2). 
-
-(*environment (eta)*)
-Definition env (A:Type) (B:Type) := list (A * B). 
-
-(*Specificaion of SAT' satisfiability*)
-Inductive SAT' : env bvar bool -> bformula -> Prop :=
-|satp : forall eta u, In (u, true) eta -> SAT' eta (pos u)
-|satn : forall eta u, In (u, false) eta -> SAT' eta (neg u)
-|satConj : forall eta F1 F2, SAT' eta F1 -> SAT' eta F2 -> SAT' eta (conjForm F1 F2)
-|satDisj1 : forall eta F1 F2, SAT' eta F1 -> SAT' eta (disjForm F1 F2)
-|satDij2 : forall eta F1 F2, SAT' eta F2 -> SAT' eta (disjForm F1 F2).
-
-Fixpoint setVars n eta F :=
-  match n with
-      |0 => SAT' eta F
-      |S n'' => (setVars n'' ((n'', true)::eta) F) \/ 
-               (setVars n'' ((n'', false)::eta) F)
+Definition swapVar (v:node) (v':nat) (c:nat) : node := 
+  match v with
+      |varNode vn => if eq_nat_dec vn v'
+                    then colorNode c
+                    else v
+      |colorNode _ => v
   end. 
 
-Definition SAT n F := setVars n nil F. 
+(*replace all occurances of a bound variable with a color*)
+Fixpoint openGraph (k:nat) (G:graph) (c:nat) : graph := 
+  match G with
+      |emptyGraph => emptyGraph
+      |newEdge e1 e2 G' => newEdge (swapVar e1 k c) (swapVar e2 k c)
+                                  (openGraph k G' c)
+      |gunion G1 G2 => gunion (openGraph k G1 c) (openGraph k G2 c)
+      |newVert G' => openGraph (S k) G' c
+  end. 
+
+Inductive graphWF : graph -> Prop :=
+|emptyWF : graphWF emptyGraph
+|newEWF : forall v1 v2 G, graphWF (newEdge (colorNode v1) (colorNode v2) G)
+|unionWF : forall G1 G2, graphWF G1 -> graphWF G2 -> graphWF (gunion G1 G2)
+|newVertWF : forall G, graphWF (openGraph 0 G 0) -> graphWF (newVert G). 
+
+(*Specificaion of SAT' satisfiability*)
+Inductive SAT : bformula -> Prop :=
+|satConst : SAT (const true)
+|satConj : forall F1 F2, SAT F1 -> SAT F2 -> SAT (conjForm F1 F2)
+|satDisj1 : forall F1 F2, SAT F1 -> SAT (disjForm F1 F2)
+|satDij2 : forall F1 F2, SAT F2 -> SAT (disjForm F1 F2)
+|newVarT : forall F, SAT (openF 0 F true) -> SAT (newVar F)
+|newVarF : forall F, SAT (openF 0 F false) -> SAT (newVar F). 
 
 (*specification of graph coloring*)
-Inductive coloring : env vvar colors -> graph -> nat -> Prop :=
-|cgempty : forall eta C, coloring eta emptyGraph C 
-|cgEdge : forall eta C1 C2 C A B G, In (A, C1) eta -> In (B, C2) eta ->
-                             C1 <= C -> C2 <= C -> C1 <> C2 -> coloring eta G C ->
-                             coloring eta (newEdge A B G) C
-|cgUnion : forall eta G1 G2 C, coloring eta G1 C -> coloring eta G2 C ->
-                        coloring eta (gunion G1 G2) C. 
-
-Inductive setVarsG (i:nat) : list (vvar * colors) -> graph -> colors -> Prop :=
-|setVarsDone : forall eta G C, i = 0 -> coloring eta G C -> setVarsG i eta G C
-|setVarsNeq : forall eta G C C' i', i = S i' -> C' <= C -> setVarsG i' eta G C ->
-                             setVarsG i ((i', C')::eta) G C. 
-Fixpoint newE es G :=
-  match es with
-      |(e1,e2)::es => newEdge e1 e2 (newE es G)
-      |_ => G
-  end.  
+Inductive coloring : graph -> nat -> Prop :=
+|cgempty : forall C, coloring emptyGraph C 
+|cgEdge : forall C1 C2 C G, C1 <= C -> C2 <= C -> C1 <> C2 -> 
+                       coloring G C -> 
+                       coloring (newEdge (colorNode C1) (colorNode C2) G) C
+|cgUnion : forall G1 G2 C, coloring G1 C -> coloring G2 C ->
+                      coloring (gunion G1 G2) C
+|cgNewVert : forall G C C', C' <= C -> coloring (openGraph 0 G C') C ->
+                       coloring (newVert G) C. 
 
 (*-------------------------Reduction------------------------------*)
 (*For every boolean variable in Delta, find the x that it maps to in Gamma and create
 an edge from that x to to the vertex variable provided (X)*)
 Inductive connectX : list (bvar * vvar * vvar * vvar) -> list bvar ->
-                           vvar -> graph -> Prop :=
+                     vvar -> graph -> Prop :=
 |connectXNil : forall Gamma X, connectX Gamma nil X emptyGraph
 |connectX_vtx : forall Gamma Delta u v v' x' X G, 
                   In (u, v, v', x') Gamma -> connectX Gamma Delta X G -> 
-                  connectX Gamma (u::Delta) X (newEdge X x' G). 
+                  connectX Gamma (u::Delta) X (newEdge (varNode X) (varNode x') G). 
 
 (*Same as above for makes edges to v and v' rather than x*)
 Inductive connectV : list (bvar * vvar * vvar * vvar) -> list bvar ->
@@ -115,7 +139,7 @@ Inductive clique : list (bvar * vvar * vvar * vvar) -> list bvar ->
 
 (*convert base (Gamma; Delta |- C Downarrow G*)
 Inductive convert_base : list (bvar * vvar * vvar * vvar) -> list bvar ->
-                         colors -> graph -> Prop :=
+                         color -> graph -> Prop :=
 |conv'''_base : forall Gamma C, convert_base Gamma nil C emptyGraph
 |conv'''_cont : forall Gamma Delta u v v' x C G,
                   In (u,v,v',x) Gamma -> convert_base Gamma Delta C G ->
@@ -146,6 +170,9 @@ Inductive convStack (i:vvar) : list (bvar * vvar * vvar * vvar) -> list bvar ->
 
 (*Top Level Reduction (Gamma; Delta |- K o F => C C' G)*)
 Inductive reduce Gamma Delta : list bformula -> bformula -> nat -> nat -> graph -> Prop :=
+(*|c_new : forall u v v' x Gamma Delta K F C C' G, 
+           reduce ((u,v,v',x)::Gamma) (u::Delta) K F (C+1) C' G -> 
+           reduce Gamma Delta K (new u F) C C' (newV [v;v';x] (newEdge (v,v') G)) *)
 |convConj : forall K F F' C C' G, 
               reduce Gamma Delta (F::K) F' C C' G ->
               reduce Gamma Delta K (conjForm F F') C C' G
@@ -198,20 +225,6 @@ Ltac invertHyp :=
       |H:?x /\ ?y |- _ => inv H; try invertHyp
   end.
 
-Inductive cliqueConsistent Gamma eta S C : list vvar -> Prop :=
-|consConsistent : forall u (x:vvar) c Delta (v v' : vvar), 
-                    cliqueConsistent Gamma eta (Ensembles.Add colors S c) C Delta ->
-                    ~ Ensembles.In colors S c -> In (u,v,v',x) Gamma -> c <= C ->
-                    In (x, c) eta -> cliqueConsistent Gamma eta S C (u::Delta)
-|nilConsistent : cliqueConsistent Gamma eta S C nil. 
-                                
-Theorem cliqueColorable : forall Gamma eta Delta C G S, 
-                            cliqueConsistent Gamma eta S C Delta ->
-                            clique Gamma Delta G -> coloring eta G C. 
-Proof.
-  intros. genDeps {{ eta; C; S }}. induction H0; intros; auto. 
-  {constructor. inv H2. eauto. Admitted. 
-
 Theorem KColorNPC : forall Gamma Delta K F C eta C' G eta',
                       reduce Gamma Delta K F C C' G ->
                       (stackSAT eta K /\ SAT' eta F <-> coloring eta' G C').
@@ -219,31 +232,28 @@ Proof.
   intros. split; intros. 
   {generalize dependent eta'. induction H; intros. 
    {invertHyp. inv H2. apply IHreduce. simpl. auto. }
-   {constructor. admit. constructor.
-    eapply cliqueColorable with (Gamma := Gamma)(S := Empty_set colors)(Delta := Delta); auto. 
-    admit. 
-
+   {Admitted. 
 
 
 Theorem KColorNPC' : forall Gamma Delta K F C eta n C' G eta',
                       Reduce F n ->
-                      (SAT n F <-> setVarsG (3 * n) eta' G C').
+                      (SAT n F <-> setVarsG eta' G C').
 Proof.
 
 
-Inductive uniqueColors (S:Ensemble colors) : env vvar colors -> Prop :=
-|uniqueNil : uniqueColors S nil
-|uniqueCons : forall x v l, uniqueColors (Add colors S v) l -> ~ Ensembles.In colors S v ->
-                       uniqueColors S ((x, v)::l)
+Inductive uniqueColor (S:Ensemble color) : env vvar color -> Prop :=
+|uniqueNil : uniqueColor S nil
+|uniqueCons : forall x v l, uniqueColor (Add color S v) l -> ~ Ensembles.In color S v ->
+                       uniqueColor S ((x, v)::l)
 .
 
 Fixpoint consistent (Gamma:list (bvar * vvar * vvar * vvar)) eta :=
   match Gamma with
-      |(u,v,v',x)::Gamma => (exists C:colors, In (x, C) eta) /\ consistent Gamma eta
+      |(u,v,v',x)::Gamma => (exists C:color, In (x, C) eta) /\ consistent Gamma eta
       |nil => True
   end. 
 
-Theorem clique_color : forall n Gamma Delta G C eta, C >= n -> length eta = n -> uniqueColors (Empty_set colors) eta ->
+Theorem clique_color : forall n Gamma Delta G C eta, C >= n -> length eta = n -> uniqueColor (Empty_set color) eta ->
                                       consistent Gamma eta -> clique Gamma Delta G -> coloring eta G C. 
 Proof.
   intros. generalize dependent eta. generalize dependent C. generalize dependent n.
@@ -259,7 +269,7 @@ Proof.
    invertHyp. eauto. }
 Qed. 
 
-Theorem colorConnectX : forall n Gamma Delta G C x eta, C >= n -> length eta = n -> uniqueColors (Empty_set colors) eta ->
+Theorem colorConnectX : forall n Gamma Delta G C x eta, C >= n -> length eta = n -> uniqueColor (Empty_set color) eta ->
                                          connectX Gamma Delta x G -> coloring eta G C. 
 Proof.
   intros. genDeps {{ n; C; eta }}. induction H2; intros. 
