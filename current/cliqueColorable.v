@@ -1,10 +1,14 @@
 Require Import ThreeSatReduction. 
 
+(*a generic specification of uniqueness (typically f is used to project
+**out of a tuple)*)
 Inductive genericUnique {A B :Type} (U:Ensemble B) (f:A -> B) : list A -> Prop :=
 |uniqueCons : forall hd tl, genericUnique (Add B U (f hd)) f tl ->
                        ~ Ensembles.In _ U (f hd) -> genericUnique U f (hd::tl)
 |uniqueNil : genericUnique U f nil. 
 
+(*specifies how a graph environment is built out of a boolean formula
+**environment and reduction contexts*)
 Inductive valid : list (bvar*vvar*vvar*vvar) -> nat -> nat ->
                         list (vvar * colors) -> list (bvar * bool) -> Prop :=
 |validF : forall u (v v' : vvar) x eta eta' C i Gamma, 
@@ -15,12 +19,14 @@ Inductive valid : list (bvar*vvar*vvar*vvar) -> nat -> nat ->
             valid ((u,v,v',x)::Gamma) C i ((v,0)::(v',i)::(x,i)::eta') ((u, false)::eta)
 |validNil : forall C i, valid nil C i nil nil.
 
+(*colors assigned to each of the xi's are unique*)
 Inductive uniqueGraphEnv S : list (vvar * colors) -> Prop :=
 |rConsUnique : forall (x x' x'':vvar) (y y' y'':colors) l, 
                  uniqueGraphEnv (Add colors S y'') l ->
                  uniqueGraphEnv S ((x,y)::(x',y')::(x'',y'')::l)
 |rNilUnique : uniqueGraphEnv S nil. 
 
+(*Set addition commutes (probably defined elsewhere in the standard library)*)
 Theorem AddComm : forall (U:Type) S i i', Add U (Add U S i) i' = Add U (Add U S i') i. 
 Proof.
   intros. apply Extensionality_Ensembles. unfold Same_set. unfold Included. 
@@ -33,6 +39,7 @@ Proof.
    apply Union_intror. constructor. }
 Qed. 
 
+(*a valid graph environment assigns unique colors to each of the xs*)
 Theorem validUnique' : forall Gamma eta eta' C i U, 
                         valid Gamma C (S i) eta' eta -> uniqueGraphEnv U eta' -> 
                         uniqueGraphEnv (Add colors U i) eta'.
@@ -51,21 +58,6 @@ Proof.
   {constructor. eapply validUnique'; eauto. }
   {constructor. eapply validUnique'; eauto. }
   {constructor. }
-Qed. 
-        
-Inductive domainsEq : list bvar -> list (bvar*vvar*vvar*vvar) -> Prop :=
-|eqCons : forall x a b c l l', domainsEq l l' -> domainsEq (x::l) ((x,a,b,c)::l')
-|eqNil : domainsEq nil nil. 
-
-(*asserts that Delta is a postfix of Domain(Gamma)*)
-Inductive domainPostfix : list bvar -> list (bvar*vvar*vvar*vvar) -> Prop :=
-|postfixCons : forall l l' hd, domainPostfix l l' -> domainPostfix l (hd::l')
-|postfixEq : forall l l', domainsEq l l' -> domainPostfix l l'. 
-
-Theorem postfixShorter : forall u Delta Gamma, domainPostfix (u::Delta) Gamma -> domainPostfix Delta Gamma. 
-Proof.
-  intros. remember(u::Delta). induction H. 
-  {constructor. auto. }{subst. inv H. apply postfixCons. apply postfixEq. auto. }
 Qed. 
 
 Ltac copy H := 
@@ -189,21 +181,13 @@ Proof.
   {constructor. }
 Qed. 
 
-Theorem ltValid : forall Gamma eta' eta c u v S v' x C j, 
-              genericUnique S (fun arg => match arg with (x,_) => x end) eta' ->
+Theorem ltValid : forall Gamma eta' eta c u v v' x C j, 
               valid Gamma C j eta' eta -> 
               In (u,v,v',x) Gamma -> In (x,c) eta' -> c >= j. 
 Proof.
-  intros. genDeps {{ c; x; u; v; v' }}. induction H0; intros. 
+  intros. genDeps {{ c; x; u; v; v' }}. induction H; intros. 
   {inv H2. 
-   {inv H4. inv H. inv H5. inv H4. inv H3. inv H. auto. inv H. 
-    inv H2. exfalso. apply H8. apply Union_intror. constructor. inv H2. 
-    inv H. auto. assert (~ In (x0,c) eta'). eapply genericUniqueNotIn. 
-    Focus 2. eauto. simpl. apply Union_intror. constructor. contradiction. }
-   {inv H3. inv H2. auto. inv H2. inv H3. inv H. inv H5. inv H3. 
-    Admitted. 
-
-
+   {Admitted. 
 
 Theorem edgesNeq : forall eta' eta Gamma C i u v v' x u1 v1 v1' x1 S1 S2 S3 S4, 
                      u <> u1 -> In (u,v,v',x) Gamma -> In (u1,v1,v1',x1) Gamma ->
@@ -261,17 +245,15 @@ Proof.
 Qed. 
 
 Theorem cliqueColorable : forall Gamma eta Delta C G eta' S1 S2 S3 S4 S5, 
-                            valid Gamma C 1 eta' eta -> domainPostfix Delta Gamma -> 
+                            valid Gamma C 1 eta' eta -> 
                             uniqueLockstep S1 S2 S3 S4 Gamma ->
                             genericUnique S5 (fun x => x) Delta -> 
                             clique Gamma Delta G -> coloring eta' G C. 
 Proof.
-  intros. genDeps {{ eta; C }}. induction H3; intros; auto. 
-  {constructor. eapply IHclique; eauto. inv H0. eapply postfixShorter. constructor. 
-   eauto. inv H6. constructor. apply postfixEq. auto. inv H2. 
-   eapply genericUniqueSubset; eauto. eapply connectXColorable; eauto. inv H2. 
-   eapply genericUniqueNotIn. Focus 2. eauto. simpl. apply Union_intror. constructor. 
-  }
+  intros. genDeps {{ eta; C }}. induction H2; intros; auto. 
+  {constructor. eapply IHclique; eauto. inv H1. eapply genericUniqueSubset; eauto. 
+   eapply connectXColorable; eauto. inv H1. eapply genericUniqueNotIn. 
+   Focus 2. eauto. simpl. apply Union_intror. constructor. }
 Qed. 
 
 Theorem KColorNPC : forall Gamma Delta K F C eta C' G eta',
