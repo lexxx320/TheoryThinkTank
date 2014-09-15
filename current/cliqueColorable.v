@@ -201,7 +201,10 @@ Proof.
     {inv H1. exfalso. apply H0; auto. }
     {inv H3. copy H1. eapply InValid in H1; eauto. invertHyp. 
      exists x. exists i. split. simpl. auto. split. simpl. auto. split; auto. 
-     eapply ltValid in H2; eauto. omega. }
+     copy H2. eapply ltValid in H2; eauto.
+     eapply validUnique with (S:=Empty_set _)in H4. 
+     
+ omega. }
    }
    {inv H4.
     {inv H1. inv H3. exists i. copy H5. eapply InValid in H5; eauto. invertHyp. 
