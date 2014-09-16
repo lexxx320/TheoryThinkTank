@@ -1,7 +1,7 @@
 Require Import ThreeSatReduction. 
 
 Theorem convFormulaColorable : forall i Gamma Delta G F eta U S1 S2 S3 S4 S5 eta' C, 
-                                 valid Gamma C 1 eta' eta -> 
+                                 valid Gamma C F eta' eta -> 
                                  uniqueLockstep S1 S2 S3 S4 Gamma ->
                                  genericUnique S5 (fun x => x) Delta -> 
                                  genericUnique U (fun a=>match a with (x,y) => x end) eta' ->

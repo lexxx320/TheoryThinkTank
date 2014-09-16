@@ -170,11 +170,6 @@ Qed.
 
 Hint Constructors coloring. 
 
-Theorem colorWeakening : forall eta G C, coloring eta G C -> coloring eta G (C+1). 
-Proof.
-  intros. induction H; eauto. econstructor; eauto; omega. 
-Qed. 
-
 Ltac inv H := inversion H; subst; clear H.
 
 Ltac invertHyp :=
@@ -194,33 +189,33 @@ Inductive winner eta : atom -> bvar -> Prop :=
 |posWinner : forall x, In (x, true) eta -> winner eta (pos x) x
 |negWinner : forall x, In (x, false) eta -> winner eta (neg x) x. 
 
-Inductive setCs env : list (bvar*vvar*vvar*vvar) -> nat -> bformula -> 
+Inductive setCs env : nat -> bformula -> 
                         list (vvar * colors) -> list (bvar * bool) -> Prop := 
-|fstSAT : forall u eta eta' c i Gamma a1 a2 a3 F,
-            In (u, c) env -> winner eta a1 u -> setCs env Gamma (S i) F eta' eta ->
-            setCs env Gamma i ((a1, a2, a3)::F) ((i, c)::eta') eta
-|sndSAT : forall u eta eta' c i Gamma a1 a2 a3 F,
-            In (u, c) env -> winner eta a2 u -> setCs env Gamma (S i) F eta' eta ->
-            setCs env Gamma i ((a1, a2, a3)::F) ((i, c)::eta') eta
-|thirdSAT : forall u eta eta' c i Gamma a1 a2 a3 F,
-            In (u, c) env -> winner eta a3 u -> setCs env Gamma (S i) F eta' eta -> 
-            setCs env Gamma i ((a1, a2, a3)::F) ((i, c)::eta') eta
-|setCsDone : forall i Gamma eta eta', setCs env Gamma i nil eta'  eta. 
+|fstSAT : forall u eta eta' c i a1 a2 a3 F,
+            In (u, c) env -> winner eta a1 u -> setCs env (S i) F eta' eta ->
+            setCs env i ((a1, a2, a3)::F) ((i, c)::eta') eta
+|sndSAT : forall u eta eta' c i a1 a2 a3 F,
+            In (u, c) env -> winner eta a2 u -> setCs env (S i) F eta' eta ->
+            setCs env i ((a1, a2, a3)::F) ((i, c)::eta') eta
+|thirdSAT : forall u eta eta' c i a1 a2 a3 F,
+            In (u, c) env -> winner eta a3 u -> setCs env (S i) F eta' eta -> 
+            setCs env i ((a1, a2, a3)::F) ((i, c)::eta') eta
+|setCsDone : forall i eta eta', setCs env i nil eta'  eta. 
 
 
 (*N is the number of clauses in the boolean formula*)
 (*specifies how a graph environment is built out of a boolean formula
 **environment and reduction contexts*) 
 Inductive setVertices : list (bvar*vvar*vvar*vvar) -> nat -> nat ->
-                  list (vvar * colors) ->  list (bvar * bool) -> Prop :=
+                              list (vvar * colors) ->  list (bvar * bool) -> Prop :=
 |setVerticesT : forall u eta eta' C Gamma, 
-            setVertices Gamma C (S u) eta' eta -> u <= C -> 
+            setVertices Gamma C (S u) eta' eta-> u < C -> 
             setVertices ((u,3*u,3*u+1,3*u+2)::Gamma) C u 
-                  ((3*u,u)::(3*u+1,C)::(3*u+2,u)::eta') ((u,true)::eta)
+                  ((3*u,u)::(3*u+1,C)::(3*u+2,u)::eta') ((u,true)::eta) 
 |setVerticesF : forall u eta eta' C Gamma, 
-            setVertices Gamma C (S u) eta' eta -> u <= C ->
+            setVertices Gamma C (S u) eta' eta -> u < C ->
             setVertices ((u,3*u,3*u+1,3*u+2)::Gamma) C u
-                  ((3*u,C)::(3*u+1,u)::(3*u+2,u)::eta') ((u, false)::eta)
+                  ((3*u,C)::(3*u+1,u)::(3*u+2,u)::eta') ((u, false)::eta) 
 |setVerticesNil : forall C u, setVertices nil C u nil nil.
 
 Theorem sanityCheck : setVertices [(0,0,1,2);(1,3,4,5);(2,6,7,8)]
@@ -233,7 +228,7 @@ Qed.
 Inductive valid : list (bvar*vvar*vvar*vvar) -> nat -> bformula -> 
                   list (vvar * colors) -> list (bvar * bool) -> Prop :=
 |valid_ : forall Gamma C eta eta' eta'' F res, setVertices Gamma C 0 eta' eta -> 
-                          setCs eta' Gamma (3 * length Gamma) F eta'' eta ->
+                          setCs eta' (3 * length Gamma) F eta'' eta ->
                           res = eta' ++ eta'' -> 
                           valid Gamma C F res eta. 
 
@@ -248,12 +243,11 @@ Proof.
   auto. constructor. 
 Qed. 
 
-(*colors assigned to each of the xi's are unique*)
-Inductive uniqueGraphEnv S : list (vvar * colors) -> Prop :=
-|rConsUnique : forall (x:vvar) (y y' y'':colors) l, 
-                 uniqueGraphEnv (Add colors S y'') l ->
-                 uniqueGraphEnv S ((x,y)::(x+1,y')::(x+2,y'')::l)
-|rNilUnique : uniqueGraphEnv S nil. 
+Definition optLT x y :=
+  match x with
+      |None => True
+      |Some x' => x' < y
+  end. 
 
 (*Set addition commutes (probably defined elsewhere in the standard library)*)
 Theorem AddComm : forall (U:Type) S i i', Add U (Add U S i) i' = Add U (Add U S i') i. 
@@ -266,38 +260,6 @@ Proof.
   {inv H. inv H0. constructor. constructor. auto. inv H. unfold Add. 
    apply Union_intror. constructor. inv H0. constructor. unfold Add. 
    apply Union_intror. constructor. }
-Qed. 
-
-Theorem setVerticesUnique : forall Gamma eta eta' C S i, 
-                        setVertices Gamma C i eta' eta -> 
-                        (forall x, Ensembles.In _ S x -> x <= i) ->
-                        uniqueGraphEnv S eta'. 
-Proof.
-  intros. generalize dependent S. induction H; intros.  
-  {constructor. eapply IHsetVertices. intros. inv H2. apply H1 in H3. 
-   omega. inv H3. omega. }
-  {constructor. eapply IHsetVertices. intros. inv H2. apply H1 in H3. 
-   omega. inv H3. omega. }
-  {constructor. }
-Qed. 
-
-
-(*a valid graph environment assigns unique colors to each of the xs*)
-Theorem validUnique : forall Gamma eta eta' C S i F, 
-                        valid Gamma C F eta' eta -> 
-                        (forall x, Ensembles.In _ S x -> x >= i) ->
-                        uniqueGraphEnv S eta'. 
-Proof.
-  intros. inv H. apply setVerticesUnique with (S := Empty_set _) in H1. 
-  Focus 2. intros. inv H. 
-
-
- generalize dependent S. induction H; intros.
-  {constructor. eapply IHvalid. intros. inv H3. apply H2 in H4. omega. inv H4. 
-   omega. }
-  {constructor. eapply IHvalid. intros. inv H3. apply H2 in H4. omega. inv H4. 
-   omega. }
-  {constructor. }
 Qed. 
 
 Ltac copy H := 
@@ -359,20 +321,29 @@ Proof.
   }
 Qed.
  
-Theorem InValid : forall u C Gamma i eta eta', 
-                    valid Gamma C i eta' eta -> In (u,3*u,3*u+1,3*u+2) Gamma -> 
+
+Theorem InSetVertices : forall u C Gamma i eta eta', 
+                    setVertices Gamma C i eta' eta -> In (u,3*u,3*u+1,3*u+2) Gamma -> 
                     exists c, In (3*u+2,c) eta' /\ c <= C. 
 Proof.
   intros. induction H. 
   {inv H0. 
-   {inv H3. econstructor. simpl. auto. }
-   {eapply IHvalid in H3. invertHyp. exists x. split; simpl; auto. }
+   {inv H2. econstructor. simpl. split. simpl. auto. omega. }
+   {eapply IHsetVertices in H2. invertHyp. exists x. split; simpl; auto. }
   }
   {inv H0. 
-   {inv H3. econstructor. simpl. auto. }
-   {eapply IHvalid in H3. invertHyp. exists x. split; simpl; auto. }
+   {inv H2. econstructor. simpl. split. auto. omega. }
+   {eapply IHsetVertices in H2. invertHyp. exists x. split; simpl; auto. }
   }
   {inv H0. }
+Qed. 
+
+Theorem InValid : forall u C Gamma i eta eta', 
+                    valid Gamma C i eta' eta -> In (u,3*u,3*u+1,3*u+2) Gamma -> 
+                    exists c, In (3*u+2,c) eta' /\ c <= C. 
+Proof.
+  intros. inv H. eapply InSetVertices in H1; eauto. invertHyp. 
+  exists x. split. apply in_app_iff. auto. auto. 
 Qed. 
 
 Theorem LSUniqueSubset : forall A B C D a b c d S1 S2 S3 S4 Gamma, 
@@ -431,37 +402,87 @@ Ltac invUnique :=
       |H:genericUnique ?U ?f (?x::?y) |- _ => inv H; try invUnique
   end. 
 
-Theorem ltValid : forall Gamma eta' eta c u C j U S1 S2 S3 S4, 
-              valid Gamma C j eta' eta -> uniqueLockstep S1 S2 S3 S4 Gamma ->
-              genericUnique U (fun a=>match a with (x,y) => x end) eta' ->
-              In (u,3*u,3*u+1,3*u+2) Gamma -> In (3*u+2,c) eta' -> c <= j. 
+Ltac inCons :=
+  match goal with
+      |H:In ?X (?x::?y) |- _ => inv H
+  end. 
+
+Theorem notInEta : forall Gamma C i eta' eta u epsilon c, 
+                     setVertices Gamma C i eta' eta -> u < i -> 
+                     (epsilon=0\/epsilon=1\/epsilon=2) -> 
+                     ~ In (3 * u + epsilon, c) eta'. 
 Proof.
-  intros. genDeps {{ c; u; U; S1; S2; S3; S4 }}. induction H; intros. 
-  {destruct (eq_nat_dec u u0). 
-   {subst. inv H4. 
-    {inv H5. invertTupEq. omega. inv H4. invertTupEq. omega. inv H5. invertTupEq. omega. 
-     assert(~ In (3 * S i + 2, c) eta'). invUnique. 
-     eapply genericUniqueNotIn. Focus 2. eauto. apply Union_intror.
-     constructor. contradiction. }
-    {invUnique. eapply InLSUnique in H10; try solve[apply Union_intror; constructor]. 
-     Focus 2. eauto. invertHyp. exfalso. apply H2. auto. }
+  intros. genDeps {{ epsilon; u }}. induction H; intros. 
+  {intros contra. inv contra.  
+   {invertTupEq. omega. }
+   {inCons. 
+    {invertTupEq. omega. }
+    {inCons.
+     {invertTupEq. omega. }
+     {assert(u0 < S u). omega. eapply IHsetVertices in H3; auto. }
+    }
    }
-   {inv H4. invertTupEq. omega. inv H5. invertTupEq. omega. inv H1. invertTupEq. omega. 
-    inv H4. invertTupEq. omega. invUnique. eapply IHvalid in H10; eauto. }
   }
-  { destruct (eq_nat_dec u u0). 
-   {subst. inv H4. 
-    {inv H5. invertTupEq. omega. inv H4. invertTupEq. omega. inv H5. invertTupEq. omega. 
-     assert(~ In (3 * S i + 2, c) eta'). invUnique. 
-     eapply genericUniqueNotIn. Focus 2. eauto. apply Union_intror.
-     constructor. contradiction. }
-    {invUnique. eapply InLSUnique in H10; try solve[apply Union_intror; constructor]. 
-     Focus 2. eauto. invertHyp. exfalso. apply H2. auto. }
+  {intros contra. inv contra.  
+   {invertTupEq. omega. }
+   {inCons. 
+    {invertTupEq. omega. }
+    {inCons.
+     {invertTupEq. omega. }
+     {assert(u0 < S u). omega. eapply IHsetVertices in H3; auto. }
+    }
    }
-   {inv H4. invertTupEq. omega. inv H5. invertTupEq. omega. inv H1. invertTupEq. omega. 
-    inv H4. invertTupEq. omega. invUnique. eapply IHvalid in H10; eauto. }
   }
-  {inv H3. }
+  {intros contra. inv contra. }
 Qed. 
 
+Theorem geSetVertices : forall Gamma eta' eta c u C j, 
+              setVertices Gamma C j eta' eta -> In (u,3*u,3*u+1,3*u+2) Gamma -> 
+              In (3*u+2,c) eta' -> c >= j. 
+Proof.
+  intros. generalize dependent u. induction H; intros. 
+  {destruct (eq_nat_dec u u0). 
+   {subst. inCons. 
+    {inCons. invertTupEq. omega. invertTupEq. omega. }
+    {inCons. 
+     {invertTupEq. omega. }
+     {inCons. invertTupEq. omega. assert(~ In (3 * u0 + 2, c) eta'). 
+      eapply notInEta; eauto. contradiction. }
+    }
+   }
+   {inCons. 
+    {inCons. invertTupEq. omega. invertTupEq. omega. }
+    {inCons. inCons. invertTupEq. omega. invertTupEq. omega. inCons. inCons. 
+     invertTupEq. omega. invertTupEq. omega. inCons. invertTupEq. omega. 
+     eapply IHsetVertices in H2; eauto. omega. }
+   }
+  }
+  {destruct (eq_nat_dec u u0). 
+   {subst. inCons. 
+    {inCons. invertTupEq. omega. invertTupEq. omega. }
+    {inCons. 
+     {invertTupEq. omega. }
+     {inCons. invertTupEq. omega. assert(~ In (3 * u0 + 2, c) eta'). 
+      eapply notInEta; eauto. contradiction. }
+    }
+   }
+   {inCons. 
+    {inCons. invertTupEq. omega. invertTupEq. omega. }
+    {inCons. inCons. invertTupEq. omega. invertTupEq. omega. inCons. inCons. 
+     invertTupEq. omega. invertTupEq. omega. inCons. invertTupEq. omega. 
+     eapply IHsetVertices in H2; eauto. omega. }
+   }
+  }
+  {inv H1. }
+Qed.
 
+Theorem colorWeakening : forall eta1 eta2 G C,
+                           coloring eta1 G C ->
+                           coloring (eta1++eta2) G C. 
+Proof.
+  intros. generalize dependent eta2. induction H; intros. 
+  {constructor. }
+  {econstructor. apply in_app_iff. eauto. apply in_app_iff. eauto. auto. auto. 
+   auto. eauto. }
+  {constructor; eauto. }
+Qed. 
