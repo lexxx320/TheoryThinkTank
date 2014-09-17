@@ -3,6 +3,8 @@
 files=(hetList.v
        ThreeSatReduction.v
        cliqueColorable.v
+       colorVarsToClique.v
+       Main.v
        )
 
 
