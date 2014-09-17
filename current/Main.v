@@ -1,4 +1,5 @@
-Require Import cliqueColorable.    
+Require Import cliqueColorable.     
+Require Import colorVarsToClique. 
  
 Ltac inSet :=
   match goal with
@@ -29,10 +30,16 @@ Theorem KColorNPC : forall Gamma Delta F C eta G eta' U,
                       (SAT' eta F <-> coloring eta' G C).
 Proof. 
   intros. inv H. split; intros. 
-  {constructor. admit. constructor. inv H0. eapply colorWeakening. eapply cliqueColorable; eauto. 
-   admit. }
-  {Admitted. 
-
+  {constructor. 
+   {
+admit. }
+   {constructor. 
+    {inv H0. eapply colorWeakening. eapply cliqueColorable; eauto. }
+    {inv H0. apply colorWeakening. eapply varsToCliqueColorable; eauto. }
+   }
+  }
+  {admit. }
+Qed. 
 
 Theorem buildCtxtUnique : forall i n Gamma Delta U, 
                             buildCtxt n i Gamma Delta -> 

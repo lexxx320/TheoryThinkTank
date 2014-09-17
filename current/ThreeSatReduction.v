@@ -96,7 +96,7 @@ Inductive connectX : list (bvar * vvar * vvar * vvar) -> list bvar ->
                   In (u, 3*u, 3*u+1, 3*u+2) Gamma -> connectX Gamma Delta X G -> 
                   connectX Gamma (u::Delta) X (newEdge X (3*u+2) G). 
 
-(*Same as above for makes edges to v and v' rather than x*)
+(*Same as above, but makes edges to v and v' rather than x*)
 Inductive connectV : list (bvar * vvar * vvar * vvar) -> list bvar ->
                       vvar -> graph -> Prop :=
 |connectV_nil : forall Gamma X, connectV Gamma nil X emptyGraph
@@ -130,16 +130,24 @@ Inductive convert_base : list (bvar * vvar * vvar * vvar) -> list bvar ->
 
 (*mkEdge c u v v' e (determines if the edge from c goes to v or v')*)
 Inductive mkEdge : vvar -> atom -> vvar -> vvar -> edge -> Prop :=
-|mkPos : forall c u v v', mkEdge c (pos u) v v' (c, v)
-|mkNeg : forall c u v v', mkEdge c (neg u) v v' (c, v'). 
+|mkPos : forall c u v v', mkEdge c (pos u) v v' (c, v')
+|mkNeg : forall c u v v', mkEdge c (neg u) v v' (c, v). 
+
+Definition getVar a :=
+  match a with
+      |pos u => u
+      |neg u => u
+  end. 
 
 Inductive convFormula (c:vvar) : list (bvar * vvar * vvar * vvar) -> list bvar ->
                         (atom * atom * atom) -> graph -> Prop := 
-|conv'' : forall Gamma Delta u1 u2 u3 G e1 e2 e3 p1 p2 p3, 
+|conv'' : forall Gamma Delta u1 u2 u3 G e1 e2 e3 p1 p2 p3 D1 D2 D3 D4, 
             In (u1,3*u1,3*u1+1,3*u1+2) Gamma -> In (u2,3*u2,3*u2+1,3*u2+2) Gamma -> In (u3,3*u3,3*u3+1,3*u3+2) Gamma ->
-            convert_base Gamma Delta c G -> mkEdge c p1 (3*u1) (3*u1+1) e1 -> mkEdge c p2 (3*u2) (3*u2+1) e2 ->
-            mkEdge c p3 (3*u3) (3*u3+1) e3 -> 
-            convFormula c Gamma (u1::u2::u3::Delta) (p1, p2, p3)
+            convert_base Gamma (D1++D2++D3++D4) c G -> 
+            mkEdge c p1 (3*u1) (3*u1+1) e1 -> getVar p1 = u1 -> getVar p2 = u2 -> getVar p3 = u3 ->
+            mkEdge c p2 (3*u2) (3*u2+1) e2 ->
+            mkEdge c p3 (3*u3) (3*u3+1) e3 -> Delta = D1++[u1]++D2++[u2]++D3++[u3]++D4 -> 
+            convFormula c Gamma Delta (p1, p2, p3)
                         (newE [e1;e2;e3] G)
 . 
 
@@ -192,13 +200,13 @@ Inductive winner eta : atom -> bvar -> Prop :=
 Inductive setCs env : nat -> bformula -> 
                         list (vvar * colors) -> list (bvar * bool) -> Prop := 
 |fstSAT : forall u eta eta' c i a1 a2 a3 F,
-            In (u, c) env -> winner eta a1 u -> setCs env (S i) F eta' eta ->
+            In (3*u, c) env -> winner eta a1 u -> setCs env (S i) F eta' eta ->
             setCs env i ((a1, a2, a3)::F) ((i, c)::eta') eta
 |sndSAT : forall u eta eta' c i a1 a2 a3 F,
-            In (u, c) env -> winner eta a2 u -> setCs env (S i) F eta' eta ->
+            In (3*u, c) env -> winner eta a2 u -> setCs env (S i) F eta' eta ->
             setCs env i ((a1, a2, a3)::F) ((i, c)::eta') eta
 |thirdSAT : forall u eta eta' c i a1 a2 a3 F,
-            In (u, c) env -> winner eta a3 u -> setCs env (S i) F eta' eta -> 
+            In (3*u, c) env -> winner eta a3 u -> setCs env (S i) F eta' eta -> 
             setCs env i ((a1, a2, a3)::F) ((i, c)::eta') eta
 |setCsDone : forall i eta eta', setCs env i nil eta'  eta. 
 
@@ -235,12 +243,12 @@ Inductive valid : list (bvar*vvar*vvar*vvar) -> nat -> bformula ->
 Theorem sanityCheck' : 
   valid [(0,0,1,2);(1,3,4,5);(2,6,7,8)]
               3  [(neg 0, pos 1, pos 2)]
-              [(0,0);(1,3);(2,0);(3,3);(4,1);(5,1);(6,2);(7,3);(8,2);(9,0)]
+              [(0,0);(1,3);(2,0);(3,3);(4,1);(5,1);(6,2);(7,3);(8,2);(9,2)]
               [(0, true); (1, false); (2, true)].
 Proof.
   econstructor. repeat econstructor. Focus 2. simpl. auto.
-  eapply thirdSAT. simpl. right. right. left. auto. constructor. simpl. 
-  auto. constructor. 
+  eapply thirdSAT with (u:=2). simpl. right. right. right. right. right. right. left. 
+  auto. constructor. simpl. auto. constructor. 
 Qed. 
 
 Definition optLT x y :=
@@ -267,61 +275,6 @@ Ltac copy H :=
       |?x => assert(x) by auto 
   end. 
 
-Inductive uniqueLockstep {a b c d : Type} S1 S2 S3 S4 : list (a*b*c*d) -> Prop :=
-|uniqueLSCons : forall x1 x2 x3 x4 l, 
-                  uniqueLockstep (Add a S1 x1) (Add b S2 x2) (Add c S3 x3)
-                                 (Add d S4 x4) l -> ~ Ensembles.In _ S1 x1 ->
-                  ~ Ensembles.In _ S2 x2 -> ~ Ensembles.In _ S3 x3 ->
-                  ~ Ensembles.In _ S4 x4 ->
-                  uniqueLockstep S1 S2 S3 S4 ((x1,x2,x3,x4)::l)
-|uniqueLSNil : uniqueLockstep S1 S2 S3 S4 nil. 
-
-Theorem InLSUnique : forall (A B C D:Type) Gamma S1 S2 S3 S4 u v v' x u1 v1 v1' x1, 
-                       Ensembles.In A S1 u -> Ensembles.In B S2 v ->
-                       Ensembles.In C S3 v' -> Ensembles.In D S4 x ->
-                       In (u1,v1,v1',x1) Gamma -> uniqueLockstep S1 S2 S3 S4 Gamma -> 
-                       u <> u1 /\ v <> v1 /\ v' <> v1' /\ x <> x1. 
-Proof.
-  induction Gamma; intros. 
-  {inv H3. }
-  {copy H3. inv H3. 
-   {inv H5. inv H4. split. intros c; subst; contradiction. 
-    split. intros c; subst; contradiction. split; intros c; subst; contradiction. 
-    inv H4. eapply IHGamma. Focus 6. eauto. constructor. auto. 
-    constructor. auto. constructor. auto. constructor. auto. auto. }
-   {inv H5. inv H4. split. intros c. subst. contradiction. 
-    split. intros c; subst. contradiction. split; intros c; subst; contradiction. 
-    inv H4. eapply IHGamma. Focus 6. eauto. constructor. auto. constructor. auto. 
-    constructor. auto. constructor. auto. auto. }
-  }
-Qed. 
-
-Theorem uniqueLSNeq : forall Gamma (u u1:bvar) (v v' x v1 v1' x1:vvar) S1 S2 S3 S4, 
-                        In (u,v,v',x) Gamma -> In (u1,v1,v1',x1) Gamma ->
-                        uniqueLockstep S1 S2 S3 S4 Gamma -> u <> u1 ->
-                        v <> v1 /\ v' <> v1' /\ x <> x1. 
-Proof.
-  induction Gamma; intros. 
-  {inv H. }
-  {simpl in *. inv H. 
-   {inv H0. 
-    {inv H. exfalso. apply H2. auto. }
-    {inv H1. eapply InLSUnique in H7; eauto. Focus 2. unfold Add. apply Union_intror. 
-     constructor. Focus 2. apply Union_intror. constructor. Focus 2. 
-     apply Union_intror. constructor. Focus 2. apply Union_intror. constructor. 
-     invertHyp. eauto. }
-   }
-   {inv H0. 
-    {inv H1. eapply InLSUnique in H7; eauto. Focus 2. apply Union_intror.
-     constructor. Focus 2. apply Union_intror. constructor. Focus 2. 
-     apply Union_intror. constructor. Focus 2. apply Union_intror. constructor. 
-     invertHyp. auto. }
-    {inv H1. eapply IHGamma. Focus 3. eauto. eauto. eauto. auto. }
-   }
-  }
-Qed.
- 
-
 Theorem InSetVertices : forall u C Gamma i eta eta', 
                     setVertices Gamma C i eta' eta -> In (u,3*u,3*u+1,3*u+2) Gamma -> 
                     exists c, In (3*u+2,c) eta' /\ c <= C. 
@@ -344,18 +297,6 @@ Theorem InValid : forall u C Gamma i eta eta',
 Proof.
   intros. inv H. eapply InSetVertices in H1; eauto. invertHyp. 
   exists x. split. apply in_app_iff. auto. auto. 
-Qed. 
-
-Theorem LSUniqueSubset : forall A B C D a b c d S1 S2 S3 S4 Gamma, 
-                           uniqueLockstep (Add A S1 a) (Add B S2 b) 
-                                          (Add C S3 c) (Add D S4 d) Gamma ->
-                           uniqueLockstep S1 S2 S3 S4 Gamma. 
-Proof.
-  intros. dependent induction H. 
-  {constructor. eapply IHuniqueLockstep; auto; try solve[rewrite AddComm; auto]. 
-   intros Contr. apply H0. constructor. auto. intros x. apply H1. constructor. auto. 
-   intros x. apply H2. constructor. auto. intros x. apply H3. constructor. auto. }
-  {constructor. }
 Qed. 
  
 Require Export Coq.Logic.Classical_Prop. 
@@ -398,8 +339,7 @@ Ltac invertTupEq :=
 
 Ltac invUnique :=
   match goal with
-      |H:uniqueLockstep ?S1 ?s2 ?s3 ?s4 (?x::?y) |- _ => inv H; try invUnique
-      |H:genericUnique ?U ?f (?x::?y) |- _ => inv H; try invUnique
+    |H:genericUnique ?U ?f (?x::?y) |- _ => inv H; try invUnique
   end. 
 
 Ltac inCons :=
@@ -485,4 +425,46 @@ Proof.
   {econstructor. apply in_app_iff. eauto. apply in_app_iff. eauto. auto. auto. 
    auto. eauto. }
   {constructor; eauto. }
+Qed. 
+
+Theorem XMapsToU : forall u Gamma C eta' eta i, 
+                     In (u,3*u,3*u+1,3*u+2) Gamma -> 
+                     setVertices Gamma C i eta' eta -> In (3*u+2,u) eta' /\ u < C.
+Proof. 
+  intros. induction H0. 
+  {destruct (eq_nat_dec u u0). 
+   {inCons. invertTupEq. simpl. split; auto. split. simpl. auto. omega. }
+   {inCons. invertTupEq. omega. eapply IHsetVertices in H2; eauto. invertHyp. 
+    split. simpl. auto. auto. }
+  }
+  {destruct (eq_nat_dec u u0). 
+   {inCons. invertTupEq. simpl. split; auto. split. simpl. auto. omega. }
+   {inCons. invertTupEq. omega. eapply IHsetVertices in H2; eauto. invertHyp. 
+    split. simpl. auto. auto. }
+  }
+  {inv H. }
+Qed. 
+
+Theorem V_V'MapToUOrC : forall u Gamma C eta' eta i, 
+                          In (u,3*u,3*u+1,3*u+2) Gamma -> 
+                          setVertices Gamma C i eta' eta -> 
+                          (In (3*u,u) eta' /\ u < C /\ In (3*u+1,C) eta') \/
+                          (In (3*u,C) eta' /\ u < C /\ In (3*u+1,u) eta').
+Proof.
+  intros. induction H0. 
+  {destruct (eq_nat_dec u u0). 
+   {subst. inCons. invertTupEq. left. simpl. auto. eapply IHsetVertices in H2. inv H2. 
+    invertHyp. left. simpl. auto. invertHyp. left. simpl. auto. }
+   {inCons. invertTupEq. omega. eapply IHsetVertices in H2. inv H2. invertHyp.
+    left. split. simpl. auto. split. auto. simpl. auto. invertHyp. right. 
+    simpl. split; auto. }
+  }
+  {destruct (eq_nat_dec u u0). 
+   {subst. inCons. invertTupEq. right. simpl. auto. eapply IHsetVertices in H2. inv H2. 
+    invertHyp. right. simpl. auto. invertHyp. right. simpl. auto. }
+   {inCons. invertTupEq. omega. eapply IHsetVertices in H2. inv H2. invertHyp.
+    left. split. simpl. auto. split. auto. simpl. auto. invertHyp. right. 
+    simpl. split; auto. }
+  }
+  {inv H. }
 Qed. 
