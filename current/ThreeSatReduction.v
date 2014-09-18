@@ -347,7 +347,7 @@ Ltac inCons :=
       |H:In ?X (?x::?y) |- _ => inv H
   end. 
 
-Theorem notInEta : forall Gamma C i eta' eta u epsilon c, 
+Theorem notInEta' : forall Gamma C i eta' eta u epsilon c, 
                      setVertices Gamma C i eta' eta -> u < i -> 
                      (epsilon=0\/epsilon=1\/epsilon=2) -> 
                      ~ In (3 * u + epsilon, c) eta'. 
@@ -387,7 +387,7 @@ Proof.
     {inCons. 
      {invertTupEq. omega. }
      {inCons. invertTupEq. omega. assert(~ In (3 * u0 + 2, c) eta'). 
-      eapply notInEta; eauto. contradiction. }
+      eapply notInEta'; eauto. contradiction. }
     }
    }
    {inCons. 
@@ -403,7 +403,7 @@ Proof.
     {inCons. 
      {invertTupEq. omega. }
      {inCons. invertTupEq. omega. assert(~ In (3 * u0 + 2, c) eta'). 
-      eapply notInEta; eauto. contradiction. }
+      eapply notInEta'; eauto. contradiction. }
     }
    }
    {inCons. 
