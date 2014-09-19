@@ -5,6 +5,7 @@ files=(hetList.v
        cliqueColorable.v
        colorVarsToClique.v
        colorConvStack.v
+       colorImpliesSAT.v
        Main.v
        )
 
