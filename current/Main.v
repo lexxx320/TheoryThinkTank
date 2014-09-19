@@ -1,6 +1,7 @@
-Require Import cliqueColorable.     
+Require Import cliqueColorable.      
 Require Import colorVarsToClique. 
 Require Import colorConvStack. 
+Require Import colorImpliesSAT. 
 
 Ltac inSet :=
   match goal with
@@ -8,29 +9,9 @@ Ltac inSet :=
       |H:Ensembles.In _ (Singleton _ ?x) ?y |- _ => inv H
   end. 
 
-Theorem validEnvDomainUnique : forall Gamma C eta' eta i U, 
-                                 setVertices Gamma C i eta' eta ->
-                                 (forall x, Ensembles.In _ U x -> x < 3 * i) -> 
-                                 genericUnique U (fun a => match a with (x,y) => x end) eta'. 
-Proof.
-  intros. genDeps {{ U }}. induction H; intros. 
-  {constructor. constructor. constructor. eapply IHsetVertices. intros. inSet. inSet.
-   inSet. apply H1 in H3. omega. inSet. omega. inSet. omega. inSet. omega. intros c. inSet. 
-   inSet. apply H1 in H3. omega. inSet. omega. inSet. omega. intros c. inSet. apply H1 in H2. 
-   omega. inSet. omega. intros c. apply H1 in c. omega. }
-  {constructor. constructor. constructor. eapply IHsetVertices. intros. inSet. inSet.
-   inSet. apply H1 in H3. omega. inSet. omega. inSet. omega. inSet. omega. intros c. inSet. 
-   inSet. apply H1 in H3. omega. inSet. omega. inSet. omega. intros c. inSet. apply H1 in H2. 
-   omega. inSet. omega. intros c. apply H1 in c. omega. }
-  {constructor. }
-Qed. 
-
-
-
-
 Theorem KColorNPC : forall Gamma Delta F C eta G eta' U,
                       reduce Gamma Delta F C G -> 
-                      valid Gamma C F eta' eta -> genericUnique U (fun x => x) Delta -> 
+                      valid Gamma C F eta' eta -> unique U Delta -> 
                       (SAT' eta F <-> coloring eta' G C).
 Proof. 
   intros. inv H. split; intros. 
@@ -41,14 +22,14 @@ Proof.
     {inv H0. apply colorWeakening. eapply varsToCliqueColorable; eauto. }
    }
   }
-  {inv H0. inv H. inv H11. eapply colorImpliesSAT. eauto.eauto. eapply H9. 
-   rewrite mult_comm. eauto. }
+  {inv H0. inv H. inv H11. eapply colorImpliesSAT. eauto. eauto. eapply H9.
+   auto. eauto. rewrite mult_comm. eauto. }
 Qed. 
 
 Theorem buildCtxtUnique : forall i n Gamma Delta U, 
                             buildCtxt n i Gamma Delta -> 
                             (forall x, Ensembles.In vvar U x -> x < i) -> 
-                            genericUnique U (fun x=> x) Delta. 
+                            unique U Delta. 
 Proof.
   intros. generalize dependent U. induction H; intros. 
   {constructor. eapply IHbuildCtxt. intros. inSet. apply H0 in H2. 

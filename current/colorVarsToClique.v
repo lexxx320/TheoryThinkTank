@@ -49,18 +49,18 @@ Proof.
   }
 Qed. 
 
-Theorem varsToCliqueColorable : forall Gamma eta Delta C G eta' S5, 
+Theorem varsToCliqueColorable : forall Gamma eta Delta C G eta' U, 
                             setVertices Gamma C 0 eta' eta -> 
-                            genericUnique S5 (fun x => x) Delta -> 
+                            unique U Delta -> 
                             vars_to_clique Gamma Delta G -> coloring eta' G C. 
 Proof.
-  intros. genDeps {{ S5; eta'; eta; C }}. induction H1; intros. 
+  intros. genDeps {{ U; eta'; eta; C }}. induction H1; intros. 
   {constructor. }
-  {constructor. eapply IHvars_to_clique; eauto. inv H5. eauto. constructor. 
-   eapply connectXColorable; eauto. eapply genericUniqueNotIn; eauto. Focus 2. inv H5. 
-   eauto. apply Union_intror. constructor. constructor. eapply connectXColorable'; eauto. 
-   inv H5. eapply genericUniqueNotIn. Focus 2. eauto. apply Union_intror. constructor. 
-   eapply connectVColorable; eauto. inv H5. eapply genericUniqueNotIn. Focus 2. eauto. 
+  {inv H5. constructor. eapply IHvars_to_clique; eauto. constructor. 
+   eapply connectXColorable; eauto. eapply uniqueNotIn; eauto. apply Union_intror. 
+   constructor. constructor. eapply connectXColorable'; eauto. 
+   eapply uniqueNotIn; eauto. apply Union_intror. constructor. 
+   eapply connectVColorable; eauto. eapply uniqueNotIn; eauto.  
    apply Union_intror. constructor. }
 Qed. 
 

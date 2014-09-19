@@ -8,30 +8,6 @@ Ltac negate H :=
       |?x => assert(~ x)
   end. 
 
-Theorem InEtaInEta' : forall u c b Gamma C i eta eta', In (u, b) eta -> In (3*u, c) eta' -> 
-                                            setVertices Gamma C i eta' eta -> 
-                                            (c = u /\ In (u, true) eta) \/ (c = C /\ In (u, false) eta). 
-Proof.
-  intros. genDeps {{ u; c; b }}. induction H1; intros. 
-  {destruct (eq_nat_dec u u0). 
-   {subst. inCons. invertTupEq. left. split; simpl; auto. inCons. invertTupEq. omega. 
-    inCons. invertTupEq. omega. negate H3. assert(3*u0=3*u0+0) by auto. rewrite H2. 
-    eapply notInEta'; eauto. contradiction. }
-   {inCons. invertTupEq. omega. inCons. invertTupEq. omega. inCons. invertTupEq. 
-    omega. inCons. invertTupEq. omega. eapply IHsetVertices in H3; eauto. inv H3. invertHyp. 
-    left. split; simpl; auto. invertHyp. right. split; simpl; auto. }
-  }
-  {destruct (eq_nat_dec u u0). 
-   {subst. inCons. invertTupEq. right. split; simpl; auto. inCons. invertTupEq. omega. 
-    inCons. invertTupEq. omega. negate H3. assert(3*u0=3*u0+0) by auto. rewrite H2. 
-    eapply notInEta'; eauto. contradiction. }
-   {inCons. invertTupEq. omega. inCons. invertTupEq. omega. inCons. invertTupEq. 
-    omega. inCons. invertTupEq. omega. eapply IHsetVertices in H3; eauto. inv H3. invertHyp. 
-    left. split; simpl; auto. invertHyp. right. split; simpl; auto. }
-  }
-  {inv H. }
-Qed. 
-
 Theorem threeX : forall x, x+(x+(x+0)) = 3 * x + 0. auto. Qed. 
 
 Ltac tryInv := repeat (try inCons; try invertTupEq). 
@@ -97,27 +73,27 @@ Proof.
 Qed. 
 
 Theorem uniqueAppendNeq : forall (A:Type) S1 S2 (u1 u2:A) U,
-                            In u1 S1 -> In u2 S2 -> genericUnique U (fun x => x) (S1 ++ S2) ->
+                            In u1 S1 -> In u2 S2 -> unique U (S1 ++ S2) ->
                             u1 <> u2. 
 Proof.
   induction S1; intros. 
   {inv H. }
   {inv H1. simpl in H. inv H. 
-   {eapply genericUniqueNotIn in H4. Focus 2. apply Union_intror. constructor. 
+   {eapply uniqueNotIn in H4. Focus 2. apply Union_intror. constructor. 
     intros c. subst. apply H4. apply in_app_iff. auto. }
    {eauto. }
   }
 Qed. 
 
 Theorem uniqueMid : forall (A:Type) D1 D2 (u:A) U, 
-                      genericUnique U (fun x => x) (D1++[u]++D2) ->
+                      unique U (D1++[u]++D2) ->
                       ~ In u (D1++D2). 
 Proof.
   induction D1; intros. 
-  {simpl in *. inv H. eapply genericUniqueNotIn. Focus 2. eauto. simpl. 
+  {simpl in *. inv H. eapply uniqueNotIn. Focus 2. eauto. simpl. 
    apply Union_intror. constructor. }
   {inv H. rewrite consApp in H2. copy H2. eapply IHD1 in H2; eauto. simpl. 
-   intros c. inv c. eapply genericUniqueNotIn in H. Focus 2. apply Union_intror. 
+   intros c. inv c. eapply uniqueNotIn in H. Focus 2. apply Union_intror. 
    constructor. apply H. rewrite in_app_iff. right. simpl. auto. contradiction. }
 Qed. 
 
@@ -127,7 +103,6 @@ Proof.
   intros. rewrite in_app_iff in *. intros c. apply H. inv c. auto. right.
   simpl. auto. 
 Qed. 
-
 
 Ltac invIn := 
   match goal with
@@ -144,7 +119,7 @@ Ltac solveIn :=
   end. 
 
 Theorem TripleNotIn : forall (A:Type) (u1 u2 u3:A) U D1 D2 D3 D4, 
-                        genericUnique U (fun x => x) (D1++u1::D2++u2::D3++u3::D4) ->
+                        unique U (D1++u1::D2++u2::D3++u3::D4) ->
                         ~ In u1 (D1++D2++D3++D4) /\ ~ In u2 (D1++D2++D3++D4) /\
                         ~ In u3 (D1++D2++D3++D4). 
 Proof.
@@ -161,7 +136,7 @@ Proof.
 Qed. 
 
 Theorem TripleNeq : forall (A:Type) (u1 u2 u3:A) U D1 D2 D3 D4, 
-                      genericUnique U (fun x => x) (D1++u1::D2++u2::D3++u3::D4) ->
+                      unique U (D1++u1::D2++u2::D3++u3::D4) ->
                       u1 <> u2 /\ u2 <> u3 /\ u1 <> u3. 
 Proof.
   intros. assert(D1++u1::D2++u2::D3++u3::D4 = (D1++[u1]) ++ (D2++u2::D3++u3::D4)). 
@@ -200,7 +175,7 @@ Qed.
 Theorem convFormulaColorable : forall i Gamma Delta G eta K U eta'' F eta' C, 
                                  setVertices Gamma C 0 eta' eta -> SAT' eta (F::K) ->
                                  setCs eta' i (F::K) eta'' eta -> 
-                                 genericUnique U (fun x => x) Delta -> 
+                                 unique U Delta -> 
                                  convFormula i Gamma Delta F G -> coloring (eta'++eta'') G C.
 Proof. 
   intros. inv H3. simpl. destruct e1. destruct e2. destruct e3. simpl in H2. 
@@ -424,13 +399,13 @@ Proof.
   }
 Qed. 
 
-Theorem convStackColorable : forall i Gamma Delta G eta F S5 eta'' eta' C, 
+Theorem convStackColorable : forall i Gamma Delta G eta F U eta'' eta' C, 
                                setVertices Gamma C 0 eta' eta -> SAT' eta F ->
                                setCs eta' i F eta'' eta ->
-                               genericUnique S5 (fun x => x) Delta -> 
+                               unique U Delta -> 
                                convStack i Gamma Delta F G -> coloring (eta' ++ eta'') G C.
 Proof.
-  intros. genDeps {{ S5; eta; eta'; C; eta'' }}. induction H3; intros. 
+  intros. genDeps {{ U; eta; eta'; C; eta'' }}. induction H3; intros. 
   {constructor. }
   {constructor. 
    {inv H1. inv H2. 

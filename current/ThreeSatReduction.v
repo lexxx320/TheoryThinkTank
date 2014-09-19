@@ -11,6 +11,7 @@ Require Export Arith.
 Require Export Arith.EqNat.  
 Require Export hetList. 
 Require Export Coq.Program.Equality. 
+Require Export Coq.Logic.Classical_Prop. 
 
 Definition bvar := nat. (*boolean variables*)
 Definition vvar := nat. (*vertex variables*)
@@ -22,25 +23,11 @@ Inductive atom : Type := pos : bvar -> atom | neg : bvar -> atom.
 
 Definition bformula := list (atom * atom * atom). 
 
-Inductive atomWF (n:nat) : atom -> Prop :=
-|posWF : forall x, x < n -> atomWF n (pos x)
-|negWF : forall x, x < n -> atomWF n (neg x). 
-
-Inductive bformulaWF (n:nat) : bformula -> Prop :=
-|consWF : forall a1 a2 a3 tl, atomWF n a1 -> atomWF n a2 -> atomWF n a3 -> 
-                         bformulaWF n tl -> bformulaWF n ((a1,a2,a3)::tl)
-|nilWF : bformulaWF n nil. 
-
 (*graph*)
 Inductive graph : Type :=
 |emptyGraph : graph
 |newEdge : vvar -> vvar -> graph -> graph
 |gunion : graph -> graph -> graph. 
-
-Inductive graphWF (n:nat) : graph -> Prop :=
-|emptyWF : graphWF n emptyGraph
-|newEWF : forall v1 v2 G, graphWF n G -> v1 < n -> v2 < n -> graphWF n (newEdge v1 v2 G)
-|unionWF : forall G1 G2, graphWF n G1 -> graphWF n G2 -> graphWF n (gunion G1 G2). 
 
 (*Specificaion of SAT' satisfiability*)
 
@@ -59,11 +46,6 @@ Fixpoint setVars n eta F :=
       |S n'' => (setVars n'' ((n'', true)::eta) F) \/ 
                (setVars n'' ((n'', false)::eta) F)
   end. 
-
-Inductive setVarsF (i:nat) : list (bvar * bool) -> bformula -> Prop :=
-|setVarsDoneF : forall eta F, i = 0 -> SAT' eta F -> setVarsF i eta F
-|setVarsConsF : forall eta F i', i = S i' -> setVarsF i' eta F -> setVarsF i ((i', false)::eta) F
-|setVarsconsT : forall eta F i', i = S i' -> setVarsF i' eta F -> setVarsF i ((i',true)::eta) F. 
 
 Definition SAT n F := setVars n nil F. 
 
@@ -186,12 +168,10 @@ Ltac invertHyp :=
       |H:?x /\ ?y |- _ => inv H; try invertHyp
   end.
 
-(*a generic specification of uniqueness (typically f is used to project
-**out of a tuple)*)
-Inductive genericUnique {A B :Type} (U:Ensemble B) (f:A -> B) : list A -> Prop :=
-|uniqueCons : forall hd tl, genericUnique (Add B U (f hd)) f tl ->
-                       ~ Ensembles.In _ U (f hd) -> genericUnique U f (hd::tl)
-|uniqueNil : genericUnique U f nil. 
+Inductive unique {A:Type} (U:Ensemble A) : list A -> Prop :=
+|uniqueCons : forall hd tl, unique (Add A U hd) tl -> ~ Ensembles.In _ U hd ->
+                       unique U (hd::tl)
+|uniqueNil : unique U nil.
 
 Inductive winner eta' eta : atom -> bvar -> colors -> Prop :=
 |posWinner : forall c u, In (3*u, c) eta' -> In (u, true) eta -> winner eta' eta (pos u) u c
@@ -252,12 +232,6 @@ Proof.
   right. right. right. right. auto. simpl. auto. constructor. 
 Qed. 
 
-Definition optLT x y :=
-  match x with
-      |None => True
-      |Some x' => x' < y
-  end. 
-
 (*Set addition commutes (probably defined elsewhere in the standard library)*)
 Theorem AddComm : forall (U:Type) S i i', Add U (Add U S i) i' = Add U (Add U S i') i. 
 Proof.
@@ -299,8 +273,6 @@ Proof.
   intros. inv H. eapply InSetVertices in H1; eauto. invertHyp. 
   exists x. split. apply in_app_iff. auto. auto. 
 Qed. 
- 
-Require Export Coq.Logic.Classical_Prop. 
 
 Theorem notDistr : forall A B, ~(A \/ B) <-> ~ A /\ ~ B. 
 Proof.
@@ -309,26 +281,16 @@ Proof.
   {unfold not in H. invertHyp. intros c. inv c. auto. auto. }
 Qed. 
 
-Theorem genericUniqueNotIn : forall A B S (f:A -> B) (u:A) Delta,
-                               Ensembles.In _ S (f u) -> 
-                               genericUnique S f Delta ->  ~ In u Delta. 
+Theorem uniqueNotIn : forall A S (u:A) Delta,
+                               Ensembles.In _ S u -> 
+                               unique S Delta ->  ~ In u Delta. 
 Proof.
   intros. induction H0. 
   {assert(u=hd \/ u <> hd). apply classic. inv H2. 
    {contradiction. }
-   {simpl. rewrite notDistr. split. auto. apply IHgenericUnique. constructor. auto. }
+   {simpl. rewrite notDistr. split. auto. apply IHunique. constructor. auto. }
   }
   {intros c. auto. }
-Qed. 
-
-Theorem genericUniqueSubset : forall A B (f:A -> B) U u Delta, 
-                                genericUnique (Add B U u) f Delta ->
-                                genericUnique U f Delta. 
-Proof.
-  intros. dependent induction H. 
-  {subst. constructor. eapply IHgenericUnique. rewrite AddComm. auto. 
-   intros c. apply H0. constructor. auto. }
-  {constructor. }
 Qed. 
 
 Ltac invertTupEq := 
@@ -340,7 +302,7 @@ Ltac invertTupEq :=
 
 Ltac invUnique :=
   match goal with
-    |H:genericUnique ?U ?f (?x::?y) |- _ => inv H; try invUnique
+    |H:unique ?U (?x::?y) |- _ => inv H; try invUnique
   end. 
 
 Ltac inCons :=

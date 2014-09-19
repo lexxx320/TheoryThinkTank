@@ -1,19 +1,5 @@
 Require Import ThreeSatReduction.  
 
-
-
-
-Theorem convStackOutOfScope : forall eta'' eta' i Gamma Delta K G j c C eta, 
-                                convStack i Gamma Delta K G ->j < i -> 
-                                setVertices Gamma C 0 eta' eta -> setCs eta' i K eta'' eta ->
-                                coloring (eta'++(j,c)::eta'') G C ->
-                                coloring (eta'++eta'') G C. 
-Proof.
-  intros. genDeps {{ eta; eta'; eta''; j; C; c }}. induction H; intros. 
-  {constructor. }
-  {constructor. 
-
-
 Fixpoint graphFVs G :=
   match G with
     |emptyGraph => []
@@ -62,26 +48,63 @@ Proof.
    inv H1. auto. contradiction. }
 Qed. 
 
+Theorem notOrCommute : forall A B, ~ A -> ~B -> ~(A \/ B). 
+Proof.
+  intros. intros c. inv c. apply H. auto. apply H0. auto. 
+Qed. 
+
+Theorem inGammaLT : forall Gamma C i eta eta' u, In (u,3*u,3*u+1,3*u+2) Gamma -> setVertices Gamma C i eta' eta ->
+                                         3 * u + 2 < 3 * (length Gamma + i). 
+Proof.
+  intros. induction H0. 
+  {inv H. 
+   {invertTupEq. simpl. omega. }
+   {eapply IHsetVertices in H2. simpl. omega. }
+  }
+  {inv H. 
+   {invertTupEq. simpl. omega. }
+   {eapply IHsetVertices in H2. simpl. omega. }
+  }
+  {inv H. }
+Qed. 
+ 
+Theorem notInConvertBase : forall Gamma Delta i G j eta C eta',
+                             setVertices Gamma C 0 eta' eta -> j < i -> j >= 3 * length Gamma ->convert_base Gamma Delta i G ->
+                             ~ In j (graphFVs G). 
+Proof.
+  intros. induction H2. 
+  {intros c. inv c. }
+  {simpl. repeat apply notOrCommute; try apply notOrCommute; try omega. 
+   eapply inGammaLT in H2; eauto. simpl in *. repeat rewrite plus_0_r in *. 
+   apply lt_le_trans with(p:=j) in H2; auto. omega. 
+   eapply inGammaLT in H2; eauto. simpl in *. repeat rewrite plus_0_r in *. 
+   apply lt_le_trans with(p:=j) in H2; auto. omega. auto. }
+Qed. 
+
 Theorem notInFV : forall Gamma C eta1 eta Delta G j K i eta2, 
                     setVertices Gamma C 0 eta1 eta -> setCs eta1 i K eta2 eta ->
-                    j < i -> convStack i Gamma Delta K G -> ~ In j (graphFVs G). 
+                    j >= 3 * length Gamma -> j < i -> convStack i Gamma Delta K G -> ~ In j (graphFVs G). 
 Proof.
-  intros. genDeps {{ j; eta; eta1; eta2 }}. induction H2; intros.
+  intros. genDeps {{ j; eta; eta1; eta2 }}. induction H3; intros.
   {intros c. inv c. }
   {simpl. apply notInDistribute. inv H1; eapply IHconvStack; eauto;
    rewrite plus_comm; eauto. destruct F. destruct p. inv H. simpl. 
-   destruct e1. destruct e2. destruct e3. simpl. 
+   destruct e1. destruct e2. destruct e3. simpl.
+   repeat apply notOrCommute; try apply notOrCommute. inv H12; omega. eapply inGammaLT in H8; eauto. 
+   inv H12. simpl in *. repeat rewrite plus_0_r in H8. rewrite plus_0_r in H2. 
+   assert(3*u+2 < j). simpl. rewrite plus_0_r. eapply lt_le_trans with(p:=j) in H8. Focus 2. 
+   auto. auto. omega. simpl in *. eapply lt_le_trans with (p:=j) in H8. Focus 2. 
+   repeat rewrite plus_0_r in *. auto. omega. inv H18; omega. eapply inGammaLT in H9; eauto. inv H18; 
+   eapply lt_le_trans with (p:=j) in H9; simpl in *; repeat rewrite plus_0_r in *; auto; 
+   omega. inv H20; omega. eapply inGammaLT in H10; eauto.
+   inv H20; eapply lt_le_trans with (p:=j) in H10; simpl in *; repeat rewrite plus_0_r in *; auto; omega. 
+   eapply notInConvertBase; eauto. }
+Qed. 
 
-
-Theorem notInFVFormula : forall Gamma C eta1 eta Delta G j F i eta2, 
-                           setVertices Gamma C 0 eta1 eta -> setCs eta1 i K eta2 eta ->
-                           j < i -> convFormula i Gamma Delta F G -> ~ In j (graphFVs G). 
-Proof.
-
-Theorem colorImpliesSATFormula : forall Gamma C eta eta' i U eta'' Delta F G,
+Theorem colorImpliesSAT : forall Gamma C eta eta' i U eta'' Delta F G,
                             setVertices Gamma C 0 eta' eta -> setCs eta' i F eta'' eta ->
                             coloring (eta'++eta'') G C -> i >= 3 * length Gamma ->
-                            genericUnique U (fun x => x) Delta -> 
+                            unique U Delta -> 
                             convStack i Gamma Delta F G -> SAT' eta F. 
 Proof.
   intros. genDeps {{ U; eta; eta'; eta''; C }}. induction H4; intros. 
@@ -93,19 +116,29 @@ Proof.
      eapply colorStrengthening; eauto. inv H1. eauto. eapply notInFV; eauto.
      rewrite plus_comm in H4. eauto. }
     {constructor. left. constructor. auto. eapply IHconvStack. Focus 4.
-     rewrite plus_comm. eauto. Focus 3. eauto. Focus 2. eauto. admit. omega. eauto. }
+     rewrite plus_comm. eauto. Focus 3. eauto. Focus 2. eauto. 
+     eapply colorStrengthening; eauto. inv H1. eauto. eapply notInFV; eauto.
+     rewrite plus_comm in H4. eauto. omega. eauto. }
    }
-   {inv H12. 
-    {constructor. right. left. constructor. auto. eapply IHconvStack. Focus 3.
-     rewrite plus_comm. eauto. Focus 3. eauto. Focus 2. eauto. admit. }
-    {constructor. right. left. constructor. auto. eapply IHconvStack. Focus 3.
-     rewrite plus_comm. eauto. Focus 3. eauto. Focus 2. eauto. admit. }
+   {inv H13. 
+    {constructor. right. left. constructor. auto. eapply IHconvStack. Focus 4.
+     rewrite plus_comm. eauto. Focus 3. eauto. Focus 2. eauto.  
+     eapply colorStrengthening; eauto. inv H1. eauto. eapply notInFV; eauto.
+     rewrite plus_comm in H4. eauto. omega. eauto. }
+    {constructor. right. left. constructor. auto. eapply IHconvStack. Focus 4.
+     rewrite plus_comm. eauto. omega. Focus 3. eauto. Focus 2. eauto. 
+     eapply colorStrengthening; eauto. inv H1. eauto. eapply notInFV; eauto.
+     rewrite plus_comm in H4. eauto. }
    }
-   {inv H12. 
-    {constructor. right. right. constructor. auto. eapply IHconvStack. Focus 3.
-     rewrite plus_comm. eauto. Focus 3. eauto. Focus 2. eauto. admit. }
-    {constructor. right. right. constructor. auto. eapply IHconvStack. Focus 3.
-     rewrite plus_comm. eauto. Focus 3. eauto. Focus 2. eauto. admit. }
+   {inv H13. 
+    {constructor. right. right. constructor. auto. eapply IHconvStack. Focus 4.
+     rewrite plus_comm. eauto. Focus 3. eauto. Focus 3. eauto. omega. 
+      eapply colorStrengthening; eauto. inv H1. eauto. eapply notInFV; eauto.
+     rewrite plus_comm in H4. eauto. }
+    {constructor. right. right. constructor. auto. eapply IHconvStack. Focus 4.
+     rewrite plus_comm. eauto. Focus 4. eauto. Focus 3. eauto. omega. 
+      eapply colorStrengthening; eauto. inv H1. eauto. eapply notInFV; eauto.
+     rewrite plus_comm in H4. eauto. }
    }
   }
 Qed. 
