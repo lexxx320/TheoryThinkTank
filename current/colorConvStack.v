@@ -1,19 +1,23 @@
 Require Import ThreeSatReduction.   
 
+(*Trivial theorems that are useful for rewriting*)
 Theorem consApp : forall (A:Type) (hd:A) tl, hd::tl = [hd]++tl. auto. Qed. 
 Theorem plus0 : forall n, n = n + 0. auto. Qed. 
+Theorem threeX : forall x, x+(x+(x+0)) = 3 * x + 0. auto. Qed. 
 
+(*provide a named hypothesis, and this will set the current goal to the negation
+**of H*)
 Ltac negate H :=
   match type of H with
       |?x => assert(~ x)
   end. 
 
-Theorem threeX : forall x, x+(x+(x+0)) = 3 * x + 0. auto. Qed. 
-
+(*try and invoke the inCons and invertTupEq tactics 0 or more types*)
 Ltac tryInv := repeat (try inCons; try invertTupEq). 
 
+(*if setVertices is on index i and u is less than i, then u cannot be in eta*)
 Theorem notInEta : forall Gamma C i c eta' epsilon eta u, setVertices Gamma C i eta' eta -> u < i -> 
-                                     epsilon = 0 \/ epsilon = 1 \/ epsilon = 2 -> ~ In (u, c) eta. 
+                                         epsilon = 0 \/ epsilon = 1 \/ epsilon = 2 -> ~ In (u, c) eta. 
 Proof.
   intros. induction H. 
   {intros contra. simpl in *. inv contra. 
@@ -27,6 +31,7 @@ Proof.
   {intros contra. inv contra. }
 Qed. 
 
+(*if u maps to true, then v maps to u and v' maps to C*)
 Theorem InTrueV : forall u c Gamma C i eta eta', 
                     setVertices Gamma C i eta' eta -> In (3*u,c) eta' -> 
                     In (u, true) eta -> c = u /\ c < C /\ In (3*u+1,C) eta'.
@@ -50,6 +55,7 @@ Proof.
   {inv H0. }
 Qed. 
 
+(*If u maps to false, then v maps to C and v' maps to u*)
 Theorem InFalseV : forall u c Gamma C i eta eta', 
                     setVertices Gamma C i eta' eta -> In (3*u+1,c) eta' -> 
                     In (u, false) eta -> c = u /\ u < C /\ In (3*u,C) eta'.
@@ -72,6 +78,7 @@ Proof.
   {inv H0. }
 Qed. 
 
+(*if u1 and u2 are in distinct parts of a unique list then they are not equal*)
 Theorem uniqueAppendNeq : forall (A:Type) S1 S2 (u1 u2:A) U,
                             In u1 S1 -> In u2 S2 -> unique U (S1 ++ S2) ->
                             u1 <> u2. 
@@ -85,6 +92,7 @@ Proof.
   }
 Qed. 
 
+(*If u is in the middle of the list, then it is not in either remaining parts*)
 Theorem uniqueMid : forall (A:Type) D1 D2 (u:A) U, 
                       unique U (D1++[u]++D2) ->
                       ~ In u (D1++D2). 
@@ -97,6 +105,7 @@ Proof.
    constructor. apply H. rewrite in_app_iff. right. simpl. auto. contradiction. }
 Qed. 
 
+(*not in weakening*)
 Theorem notInApp : forall (A:Type) D1 D2 (u u':A), ~ In u (D1++[u']++D2) ->
                                               ~ In u (D1++D2). 
 Proof.
@@ -104,11 +113,13 @@ Proof.
   simpl. auto. 
 Qed. 
 
+(*tactic for inverting In hypotheses*)
 Ltac invIn := 
   match goal with
       |H:In ?u (?x++?y) |- _ => rewrite in_app_iff in H; inv H; try invIn
   end. 
 
+(*try and solve a goal of the form In ?x ?y*)
 Ltac solveIn :=
   match goal with
       | |- In ?x (?a ++ ?b) => rewrite in_app_iff; 
@@ -118,6 +129,8 @@ Ltac solveIn :=
       | |- _ => eauto
   end. 
 
+(*pull out three variables from a unique context and show that they are not
+**in the remaining context*)
 Theorem TripleNotIn : forall (A:Type) (u1 u2 u3:A) U D1 D2 D3 D4, 
                         unique U (D1++u1::D2++u2::D3++u3::D4) ->
                         ~ In u1 (D1++D2++D3++D4) /\ ~ In u2 (D1++D2++D3++D4) /\
@@ -135,6 +148,7 @@ Proof.
   apply H3. invIn; solveIn. 
 Qed. 
 
+(*pulling out three elements from a unique list implies they are pairwise not equal*)
 Theorem TripleNeq : forall (A:Type) (u1 u2 u3:A) U D1 D2 D3 D4, 
                       unique U (D1++u1::D2++u2::D3++u3::D4) ->
                       u1 <> u2 /\ u2 <> u3 /\ u1 <> u3. 
@@ -172,6 +186,25 @@ Proof.
   }
 Qed. 
 
+(*color an edge between c (clause vertex variable) and everything it has an edge between*)
+Theorem colorEdge :forall eta eta' p u v v' i Gamma C G eta'',
+                   setVertices Gamma C 0 eta' eta ->
+                   mkEdge i p (3* getVar p) (3 * getVar p + 1) (v,v') ->
+                   In (getVar p, 3* getVar p, 3 * getVar p + 1, 3*getVar p + 2) Gamma -> u < C -> u <> getVar p ->
+                   coloring (eta'++(i,u)::eta'') G C -> coloring (eta'++(i,u)::eta'') (newEdge v v' G) C. 
+Proof.
+  intros. inv H0. 
+  {eapply V_V'MapToUOrC in H1; eauto. inv H1; invertHyp.  
+   {simpl in *. econstructor. solveIn. solveIn. omega. auto. omega. auto. }
+   {simpl in *. econstructor. solveIn. solveIn. omega. omega. omega. auto. }
+  }
+  {eapply V_V'MapToUOrC in H1; eauto. inv H1; invertHyp.  
+   {simpl in *. econstructor. solveIn. solveIn. omega. omega. omega.  auto. }
+   {simpl in *. econstructor. solveIn. solveIn. omega. omega. omega. auto. }
+  }
+Qed. 
+
+(*color a graph that is the result of reducing a single clause*)
 Theorem convFormulaColorable : forall i Gamma Delta G eta K U eta'' F eta' C, 
                                  setVertices Gamma C 0 eta' eta -> SAT' eta (F::K) ->
                                  setCs eta' i (F::K) eta'' eta -> 
@@ -181,224 +214,33 @@ Proof.
   intros. inv H3. simpl. destruct e1. destruct e2. destruct e3. simpl in H2. 
   copy H2. apply TripleNeq in H2. invertHyp. copy H3.
   eapply TripleNotIn in H10. invertHyp. inv H1. 
-  {inv H23.  
+  {inv H23.
    {copy H. eapply InTrueV in H; eauto. invertHyp. subst. inv H8. copy H15.
-    econstructor; try apply in_app_iff; simpl; eauto; try omega. inv H12. 
-    {eapply V_V'MapToUOrC in H5; eauto. inv H5. 
-     {invertHyp. econstructor. solveIn. solveIn. omega. auto. omega. copy H. 
-      eapply V_V'MapToUOrC in H6; eauto. inv H6; invertHyp.  
-      {inv H13; econstructor; try solveIn; try omega; eapply color_convert_base; eauto. }
-      {inv H13; econstructor; try solveIn; try omega; eapply color_convert_base; eauto. }
-     }
-     {invertHyp. econstructor. solveIn. solveIn. omega. simpl in *. omega. auto. copy H6.
-      eapply V_V'MapToUOrC in H6; eauto. inv H6; invertHyp. 
-      {inv H13; econstructor; try solveIn; try omega; eapply color_convert_base; eauto. }
-      {inv H13; econstructor; try solveIn; try omega; eapply color_convert_base; eauto. }
-     }
-    }
-    {eapply V_V'MapToUOrC in H5; eauto. inv H5. 
-     {invertHyp. econstructor. solveIn. solveIn. omega. simpl in *. omega. auto. 
-      eapply V_V'MapToUOrC in H6; eauto. inv H6; invertHyp.  
-      {inv H13; econstructor; try solveIn; try omega; eapply color_convert_base; eauto. }
-      {inv H13; econstructor; try solveIn; try omega; eapply color_convert_base; eauto. }
-     }
-     {invertHyp. econstructor. solveIn. solveIn. omega. simpl in *. omega. omega. copy H6.
-      eapply V_V'MapToUOrC in H6; eauto. inv H6; invertHyp. 
-      {inv H13; econstructor; try solveIn; try omega; eapply color_convert_base; eauto. }
-      {inv H13; econstructor; try solveIn; try omega; eapply color_convert_base; eauto. }
-     }
-    }
-   }
+    econstructor; try solveIn; try omega. eapply colorEdge; eauto. 
+    eapply colorEdge; eauto. eapply color_convert_base; eauto. }
    {copy H. eapply InFalseV in H; eauto. invertHyp. subst. inv H8. copy H15.
-    econstructor; try apply in_app_iff; simpl; eauto; try omega. inv H12. 
-    {eapply V_V'MapToUOrC in H5; eauto. inv H5. 
-     {invertHyp. econstructor. solveIn. solveIn. omega. auto. omega. copy H. 
-      eapply V_V'MapToUOrC in H6; eauto. inv H6; invertHyp.  
-      {inv H13; econstructor; try solveIn; try omega; eapply color_convert_base; eauto. }
-      {inv H13; econstructor; try solveIn; try omega; eapply color_convert_base; eauto. }
-     }
-     {invertHyp. econstructor. solveIn. solveIn. omega. simpl in *. omega. auto. copy H6.
-      eapply V_V'MapToUOrC in H6; eauto. inv H6; invertHyp. 
-      {inv H13; econstructor; try solveIn; try omega; eapply color_convert_base; eauto. }
-      {inv H13; econstructor; try solveIn; try omega; eapply color_convert_base; eauto. }
-     }
-    }
-    {eapply V_V'MapToUOrC in H5; eauto. inv H5. 
-     {invertHyp. econstructor. solveIn. solveIn. omega. simpl in *. omega. auto. 
-      eapply V_V'MapToUOrC in H6; eauto. inv H6; invertHyp.  
-      {inv H13; econstructor; try solveIn; try omega; eapply color_convert_base; eauto. }
-      {inv H13; econstructor; try solveIn; try omega; eapply color_convert_base; eauto. }
-     }
-     {invertHyp. econstructor. solveIn. solveIn. omega. simpl in *. omega. omega. copy H6.
-      eapply V_V'MapToUOrC in H6; eauto. inv H6; invertHyp. 
-      {inv H13; econstructor; try solveIn; try omega; eapply color_convert_base; eauto. }
-      {inv H13; econstructor; try solveIn; try omega; eapply color_convert_base; eauto. }
-     }
-    }
-   }
+    econstructor; try apply in_app_iff; simpl; eauto; try omega. eapply colorEdge; eauto. 
+    eapply colorEdge; eauto. eapply color_convert_base; eauto. }
   }
-  {inv H23.   
-   {copy H. eapply InTrueV in H; eauto. invertHyp. subst.
-    eapply V_V'MapToUOrC in H4; eauto. inv H4; invertHyp. 
-    {inv H8; econstructor; try solveIn; try omega. 
-     {inv H12; econstructor; try solveIn; try omega. 
-      {eapply V_V'MapToUOrC in H6; eauto. inv H6; invertHyp.  
-       {inv H13;econstructor; try solveIn; try omega; eapply color_convert_base; eauto. }
-       {inv H13;econstructor; try solveIn; try omega; eapply color_convert_base; eauto. }
-      }
-     }
-     {inv H12; econstructor; try solveIn; try omega. 
-      {eapply V_V'MapToUOrC in H6; eauto. inv H6; invertHyp.  
-       {inv H13; econstructor; try solveIn; try omega; eapply color_convert_base; eauto. }
-       {inv H13; econstructor; try solveIn; try omega; eapply color_convert_base; eauto. }
-      }
-     }
-    }
-    {inv H8; econstructor; try solveIn; try omega. 
-     {inv H12; econstructor; try solveIn; try omega. 
-      {eapply V_V'MapToUOrC in H6; eauto. inv H6; invertHyp.  
-       {inv H13; econstructor; try solveIn; try omega; eapply color_convert_base; eauto. }
-       {inv H13; econstructor; try solveIn; try omega; eapply color_convert_base; eauto. }
-      }
-     }
-     {inv H12; econstructor; try solveIn; try omega. 
-      {eapply V_V'MapToUOrC in H6; eauto. inv H6; invertHyp.  
-       {inv H13; econstructor; try solveIn; try omega; eapply color_convert_base; eauto. }
-       {inv H13; econstructor; try solveIn; try omega; eapply color_convert_base; eauto. }
-      }
-     }
-    }
-   }
-   {copy H. eapply InFalseV in H; eauto. invertHyp. subst.
-    eapply V_V'MapToUOrC in H4; eauto. inv H4; invertHyp. 
-    {inv H8; econstructor; try solveIn; try omega. 
-     {inv H12; econstructor; try solveIn; try omega. 
-      {eapply V_V'MapToUOrC in H6; eauto. inv H6; invertHyp.  
-       {inv H13; econstructor; try solveIn; try omega; eapply color_convert_base; eauto.  }
-       {inv H13; econstructor; try solveIn; try omega; eapply color_convert_base; eauto. }
-      }
-     }
-     {inv H12; econstructor; try solveIn; try omega. 
-      {eapply V_V'MapToUOrC in H6; eauto. inv H6; invertHyp.  
-       {inv H13; econstructor; try solveIn; try omega; eapply color_convert_base; eauto. }
-       {inv H13; econstructor; try solveIn; try omega; eapply color_convert_base; eauto. }
-      }
-     }
-    }
-    {inv H8; econstructor; try solveIn; try omega. 
-     {inv H12; econstructor; try solveIn; try omega. 
-      {eapply V_V'MapToUOrC in H6; eauto. inv H6; invertHyp.  
-       {inv H13; econstructor; try solveIn; try omega; eapply color_convert_base; eauto. }
-       {inv H13; econstructor; try solveIn; try omega; eapply color_convert_base; eauto. }
-      }
-     }
-     {inv H12; econstructor; try solveIn; try omega. 
-      {eapply V_V'MapToUOrC in H6; eauto. inv H6; invertHyp.  
-       {inv H13; econstructor; try solveIn; try omega; eapply color_convert_base; eauto. }
-       {inv H13; econstructor; try solveIn; try omega; eapply color_convert_base; eauto. }
-      }
-     }
-    }
-   } 
+  {inv H23. 
+   {copy H. eapply InTrueV in H; eauto. invertHyp. eapply colorEdge; eauto. 
+    inv H12. econstructor; try solveIn; try omega. eapply colorEdge; eauto.
+    eapply color_convert_base; eauto. }
+   {copy H. eapply InFalseV in H; eauto. invertHyp. eapply colorEdge; eauto. 
+    inv H12. econstructor; try solveIn; try omega. eapply colorEdge; eauto.
+    eapply color_convert_base; eauto. }
   }
-  {inv H23.   
-   {copy H. eapply InTrueV in H; eauto. invertHyp. subst.
-    eapply V_V'MapToUOrC in H4; eauto. inv H4; invertHyp. 
-    {inv H8; econstructor; try solveIn; try omega. 
-     {eapply V_V'MapToUOrC in H5; eauto. inv H5; invertHyp. 
-      {inv H12; econstructor; try solveIn; try omega. 
-       {inv H13; econstructor; try solveIn; try omega;eapply color_convert_base; eauto. }
-       {inv H13; econstructor; try solveIn; try omega;eapply color_convert_base; eauto. }
-      }
-      {inv H12; econstructor; try solveIn; try omega. 
-       {inv H13; econstructor; try solveIn; try omega;eapply color_convert_base; eauto. }
-       {inv H13; econstructor; try solveIn; try omega;eapply color_convert_base; eauto. }
-      }
-     }
-     {eapply V_V'MapToUOrC in H5; eauto. inv H5; invertHyp. 
-      {inv H12; econstructor; try solveIn; try omega. 
-       {inv H13; econstructor; try solveIn; try omega;eapply color_convert_base; eauto. }
-       {inv H13; econstructor; try solveIn; try omega;eapply color_convert_base; eauto. }
-      }
-      {inv H12; econstructor; try solveIn; try omega. 
-       {inv H13; econstructor; try solveIn; try omega;eapply color_convert_base; eauto. }
-       {inv H13; econstructor; try solveIn; try omega;eapply color_convert_base; eauto. }
-      }
-     }
-    }
-    {inv H8; econstructor; try solveIn; try omega. 
-     {eapply V_V'MapToUOrC in H5; eauto. inv H5; invertHyp. 
-      {inv H12; econstructor; try solveIn; try omega. 
-       {inv H13; econstructor; try solveIn; try omega;eapply color_convert_base; eauto. }
-       {inv H13; econstructor; try solveIn; try omega;eapply color_convert_base; eauto. }
-      }
-      {inv H12; econstructor; try solveIn; try omega. 
-       {inv H13; econstructor; try solveIn; try omega;eapply color_convert_base; eauto. }
-       {inv H13; econstructor; try solveIn; try omega;eapply color_convert_base; eauto. }
-      }
-     }
-     {eapply V_V'MapToUOrC in H5; eauto. inv H5; invertHyp. 
-      {inv H12; econstructor; try solveIn; try omega. 
-       {inv H13; econstructor; try solveIn; try omega;eapply color_convert_base; eauto. }
-       {inv H13; econstructor; try solveIn; try omega;eapply color_convert_base; eauto. }
-      }
-      {inv H12; econstructor; try solveIn; try omega. 
-       {inv H13; econstructor; try solveIn; try omega;eapply color_convert_base; eauto. }
-       {inv H13; econstructor; try solveIn; try omega;eapply color_convert_base; eauto. }
-      }
-     }
-    }
-   }
-   {copy H. eapply InFalseV in H; eauto. invertHyp. subst.
-    eapply V_V'MapToUOrC in H4; eauto. inv H4; invertHyp. 
-    {inv H8; econstructor; try solveIn; try omega. 
-     {eapply V_V'MapToUOrC in H5; eauto. inv H5; invertHyp. 
-      {inv H12; econstructor; try solveIn; try omega. 
-       {inv H13; econstructor; try solveIn; try omega;eapply color_convert_base; eauto. }
-       {inv H13; econstructor; try solveIn; try omega;eapply color_convert_base; eauto. }
-      }
-      {inv H12; econstructor; try solveIn; try omega. 
-       {inv H13; econstructor; try solveIn; try omega;eapply color_convert_base; eauto. }
-       {inv H13; econstructor; try solveIn; try omega;eapply color_convert_base; eauto. }
-      }
-     }
-     {eapply V_V'MapToUOrC in H5; eauto. inv H5; invertHyp. 
-      {inv H12; econstructor; try solveIn; try omega. 
-       {inv H13; econstructor; try solveIn; try omega;eapply color_convert_base; eauto. }
-       {inv H13; econstructor; try solveIn; try omega;eapply color_convert_base; eauto. }
-      }
-      {inv H12; econstructor; try solveIn; try omega. 
-       {inv H13; econstructor; try solveIn; try omega;eapply color_convert_base; eauto. }
-       {inv H13; econstructor; try solveIn; try omega;eapply color_convert_base; eauto. }
-      }
-     }
-    }
-    {inv H8; econstructor; try solveIn; try omega. 
-     {eapply V_V'MapToUOrC in H5; eauto. inv H5; invertHyp. 
-      {inv H12; econstructor; try solveIn; try omega. 
-       {inv H13; econstructor; try solveIn; try omega;eapply color_convert_base; eauto. }
-       {inv H13; econstructor; try solveIn; try omega;eapply color_convert_base; eauto. }
-      }
-      {inv H12; econstructor; try solveIn; try omega. 
-       {inv H13; econstructor; try solveIn; try omega;eapply color_convert_base; eauto. }
-       {inv H13; econstructor; try solveIn; try omega;eapply color_convert_base; eauto. }
-      }
-     }
-     {eapply V_V'MapToUOrC in H5; eauto. inv H5; invertHyp. 
-      {inv H12; econstructor; try solveIn; try omega. 
-       {inv H13; econstructor; try solveIn; try omega;eapply color_convert_base; eauto. }
-       {inv H13; econstructor; try solveIn; try omega;eapply color_convert_base; eauto. }
-      }
-      {inv H12; econstructor; try solveIn; try omega. 
-       {inv H13; econstructor; try solveIn; try omega;eapply color_convert_base; eauto. }
-       {inv H13; econstructor; try solveIn; try omega;eapply color_convert_base; eauto. }
-      }
-     }
-    }
-   }
+  {inv H23. 
+   {copy H. eapply InTrueV in H; eauto. invertHyp. eapply colorEdge; eauto. 
+    eapply colorEdge; eauto. inv H13. econstructor; try solveIn; try omega.
+    eapply color_convert_base; eauto. }
+   {copy H. eapply InFalseV in H; eauto. invertHyp. eapply colorEdge; eauto. 
+    eapply colorEdge; eauto. inv H13. econstructor; try solveIn; try omega.
+    eapply color_convert_base; eauto. }
   }
 Qed. 
 
+(*recursively color a graph that results from reducing a formula*)
 Theorem convStackColorable : forall i Gamma Delta G eta F U eta'' eta' C, 
                                setVertices Gamma C 0 eta' eta -> SAT' eta F ->
                                setCs eta' i F eta'' eta ->

@@ -1,5 +1,9 @@
+(*vars_to_clique attaches each v_i and v_i' to x_i.  If in the boolean formula,
+**u_i is set to true in a satisfiable environment, then v_i gets assigned the color u_i
+**and v_i' gets assigned the color C*)
 Require Export ThreeSatReduction. 
 
+(*attaching v_i to x_j for i <> j preserves coloring*)
 Theorem connectXColorable : forall Gamma Delta G C eta eta' u, 
                               ~In u Delta -> setVertices Gamma C 0 eta' eta -> In (u,3*u,3*u+1,3*u+2) Gamma ->
                               connectX Gamma Delta (3*u) G -> coloring eta' G C. 
@@ -15,6 +19,7 @@ Proof.
   }
 Qed. 
 
+(*attaching v_i' to x_j for i <> j preserves coloring*)
 Theorem connectXColorable' : forall Gamma Delta G C eta eta' u, 
                               ~In u Delta -> setVertices Gamma C 0 eta' eta -> In (u,3*u,3*u+1,3*u+2) Gamma ->
                               connectX Gamma Delta (3*u+1) G -> coloring eta' G C. 
@@ -30,7 +35,7 @@ Proof.
   }
 Qed. 
 
-
+(*attaching x_i to v_i and v_i' for i <> j preserves coloring*)
 Theorem connectVColorable : forall Gamma Delta G C eta eta' u, 
                               ~In u Delta -> setVertices Gamma C 0 eta' eta -> In (u,3*u,3*u+1,3*u+2) Gamma ->
                               connectV Gamma Delta (3*u+2) G -> coloring eta' G C. 

@@ -3,6 +3,7 @@ Require Import colorVarsToClique.
 Require Import colorConvStack. 
 Require Import colorImpliesSAT. 
 
+(*tacitic for solving set membership goals*)
 Ltac inSet :=
   match goal with
       |H:Ensembles.In _ (Add _ ?x ?y) ?z |- _ => inv H
