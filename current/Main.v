@@ -1,6 +1,7 @@
 Require Import cliqueColorable.     
 Require Import colorVarsToClique. 
- 
+Require Import colorConvStack. 
+
 Ltac inSet :=
   match goal with
       |H:Ensembles.In _ (Add _ ?x ?y) ?z |- _ => inv H
@@ -24,6 +25,9 @@ Proof.
   {constructor. }
 Qed. 
 
+
+
+
 Theorem KColorNPC : forall Gamma Delta F C eta G eta' U,
                       reduce Gamma Delta F C G -> 
                       valid Gamma C F eta' eta -> genericUnique U (fun x => x) Delta -> 
@@ -31,14 +35,14 @@ Theorem KColorNPC : forall Gamma Delta F C eta G eta' U,
 Proof. 
   intros. inv H. split; intros. 
   {constructor. 
-   {
-admit. }
+   {inv H0. eapply convStackColorable in H2; eauto. rewrite mult_comm. auto. }
    {constructor. 
     {inv H0. eapply colorWeakening. eapply cliqueColorable; eauto. }
     {inv H0. apply colorWeakening. eapply varsToCliqueColorable; eauto. }
    }
   }
-  {admit. }
+  {inv H0. inv H. inv H11. eapply colorImpliesSAT. eauto.eauto. eapply H9. 
+   rewrite mult_comm. eauto. }
 Qed. 
 
 Theorem buildCtxtUnique : forall i n Gamma Delta U, 

@@ -1,7 +1,7 @@
 (*This is an effort to reproduce the results presented in:
-http://dl.acm.org/citation.cfm?id=976579
+http://dl.acm.org/citation.cfm?id=976579  
 *)
-
+ 
 Require Export Coq.Sets.Ensembles. 
 Require Export Omega.             
 Require Export Bool.
@@ -49,7 +49,7 @@ Inductive atomSAT : list (bvar * bool) -> atom -> Prop :=
 |satn : forall eta u, In (u, false) eta -> atomSAT eta (neg u). 
 
 Inductive SAT' : list (bvar * bool) -> bformula -> Prop :=
-|satCons : forall a1 a2 a3 tl eta, atomSAT eta a1 -> atomSAT eta a2 -> atomSAT eta a3 ->
+|satCons : forall a1 a2 a3 tl eta, (atomSAT eta a1 \/ atomSAT eta a2 \/ atomSAT eta a3) ->
                             SAT' eta tl -> SAT' eta ((a1,a2,a3)::tl)
 |satNil : forall eta, SAT' eta nil. 
 
@@ -193,20 +193,21 @@ Inductive genericUnique {A B :Type} (U:Ensemble B) (f:A -> B) : list A -> Prop :
                        ~ Ensembles.In _ U (f hd) -> genericUnique U f (hd::tl)
 |uniqueNil : genericUnique U f nil. 
 
-Inductive winner eta : atom -> bvar -> Prop :=
-|posWinner : forall x, In (x, true) eta -> winner eta (pos x) x
-|negWinner : forall x, In (x, false) eta -> winner eta (neg x) x. 
+Inductive winner eta' eta : atom -> bvar -> colors -> Prop :=
+|posWinner : forall c u, In (3*u, c) eta' -> In (u, true) eta -> winner eta' eta (pos u) u c
+|negWinner : forall c u, In (3*u+1, c) eta' -> In (u, false) eta -> 
+                    winner eta' eta (neg u) u c. 
 
 Inductive setCs env : nat -> bformula -> 
                         list (vvar * colors) -> list (bvar * bool) -> Prop := 
 |fstSAT : forall u eta eta' c i a1 a2 a3 F,
-            In (3*u, c) env -> winner eta a1 u -> setCs env (S i) F eta' eta ->
+            winner env eta a1 u c -> setCs env (S i) F eta' eta ->
             setCs env i ((a1, a2, a3)::F) ((i, c)::eta') eta
 |sndSAT : forall u eta eta' c i a1 a2 a3 F,
-            In (3*u, c) env -> winner eta a2 u -> setCs env (S i) F eta' eta ->
+            winner env eta a2 u c -> setCs env (S i) F eta' eta ->
             setCs env i ((a1, a2, a3)::F) ((i, c)::eta') eta
 |thirdSAT : forall u eta eta' c i a1 a2 a3 F,
-            In (3*u, c) env -> winner eta a3 u -> setCs env (S i) F eta' eta -> 
+              winner env eta a3 u c -> setCs env (S i) F eta' eta -> 
             setCs env i ((a1, a2, a3)::F) ((i, c)::eta') eta
 |setCsDone : forall i eta eta', setCs env i nil eta'  eta. 
 
@@ -242,13 +243,13 @@ Inductive valid : list (bvar*vvar*vvar*vvar) -> nat -> bformula ->
 
 Theorem sanityCheck' : 
   valid [(0,0,1,2);(1,3,4,5);(2,6,7,8)]
-              3  [(neg 0, pos 1, pos 2)]
+              3  [(neg 0, pos 1, pos 2)] 
               [(0,0);(1,3);(2,0);(3,3);(4,1);(5,1);(6,2);(7,3);(8,2);(9,2)]
               [(0, true); (1, false); (2, true)].
 Proof.
   econstructor. repeat econstructor. Focus 2. simpl. auto.
-  eapply thirdSAT with (u:=2). simpl. right. right. right. right. right. right. left. 
-  auto. constructor. simpl. auto. constructor. 
+  eapply thirdSAT with (u:=2). simpl. apply posWinner. simpl. right. right. 
+  right. right. right. right. auto. simpl. auto. constructor. 
 Qed. 
 
 Definition optLT x y :=
@@ -467,4 +468,16 @@ Proof.
     simpl. split; auto. }
   }
   {inv H. }
+Qed. 
+
+Theorem colorWeakeningApp : forall eta1 eta2 eta3 G C,
+                           coloring (eta1++eta3) G C ->
+                           coloring (eta1++eta2++eta3) G C. 
+Proof.
+  intros. genDeps {{ eta2 }}. remember(eta1++eta3). induction H; intros. 
+  {constructor. }
+  {subst. econstructor. apply in_app_iff in H. inv H. auto. apply in_app_iff; simpl.
+   eauto. repeat rewrite in_app_iff. auto. apply in_app_iff in H0. inv H0; 
+   repeat rewrite in_app_iff; eauto. auto. auto. auto. eapply IHcoloring; eauto. }
+  {constructor; eauto. }
 Qed. 
