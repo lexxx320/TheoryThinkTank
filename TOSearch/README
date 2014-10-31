@@ -35,3 +35,16 @@ orientable:
 Apparently all transitive digraphs on 5 vertices are transitively orientable so 
 the previous run will not output anything. You can repeat the experiment with 6 
 vertices to generate 3 graphs, or with 7 vertices to generate a lot of graphs.
+
+Python
+------
+* The Python code is based on the python-graph library
+  <http://code.google.com/p/python-graph/>
+* If you cannot install the library using easy_install
+  - Download a copy of the library
+  - Unzip the file into any location
+  - Copy the python-graph/core/pygraph folder into this folder
+* Open the tosearch.py script and edit the location of nauty
+* To run the example above
+  $ python tosearch.py allg5directed.g6
+* This code does not output in Graphviz format :(
