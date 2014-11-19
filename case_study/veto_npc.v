@@ -52,7 +52,8 @@ Fixpoint build_veto_b ks :=
     |List.nil => zero_vote
   end. 
 
-Definition reduce k := << 0, k*2-1, k*2-2 >>. 
+(*2k-1 votes veto p*)
+Definition reduce k := << 0, k*2-1, k*2-1 >>. 
 
 Ltac inv H := inversion H; subst; clear H. 
 
@@ -81,8 +82,8 @@ Proof.
   reflexivity. 
 Qed. 
 
-Theorem veto_npc : forall l k vs, reduce k = vs ->
-                             (partition k l <-> manipulate vs). 
+Theorem veto_npc : forall l (k:int) vs, reduce k = vs ->
+                                 (partition k l <-> manipulate vs). 
 Proof.
   intros. split; intros. 
   {inversion H0. apply manipulate_ with (votes := (add_votes (build_veto_a l1) (build_veto_b l2))). 
