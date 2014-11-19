@@ -1,0 +1,50 @@
+TOSearch
+========
+Search for digraphs that are not transitively orientable.
+
+Dependencies
+------------
+* Boost Graph Library
+  <http://www.boost.org/doc/libs/1_56_0/libs/graph>
+* pstreams
+  <http://pstreams.sourceforge.net/>
+* nauty
+  <http://cs.anu.edu.au/people/bdm/nauty/>
+
+You also need CMake to create the makefile and a compiler that knows C++11
+
+How to Build
+------------
+* Build nauty (instructions elsewhere)
+* Configure this code using
+  $ cmake -DNAUTY_PATH=<path/to/nauty/>
+* Build this code using
+  $ make
+
+How to Run
+----------
+Suppose you want to search for graphs on 5 vertices that are not transitively 
+orientable:
+1. Use nauty to generate all graphs on 5 vertices
+   $ path/to/nauty/geng 5 allg5.g6
+2. Use nauty to orient these graphs in every possible way
+   $ path/to/nauty/directg -To allg5.g6 allg5directed.g6
+3. Run this program on that last file
+   $ ./tosearch allg5directed.g6
+
+Apparently all transitive digraphs on 5 vertices are transitively orientable so 
+the previous run will not output anything. You can repeat the experiment with 6 
+vertices to generate 3 graphs, or with 7 vertices to generate a lot of graphs.
+
+Python
+------
+* The Python code is based on the python-graph library
+  <http://code.google.com/p/python-graph/>
+* If you cannot install the library using easy_install
+  - Download a copy of the library
+  - Unzip the file into any location
+  - Copy the python-graph/core/pygraph folder into this folder
+* Open the tosearch.py script and edit the location of nauty
+* To run the example above
+  $ python tosearch.py allg5directed.g6
+* This code does not output in Graphviz format :(
