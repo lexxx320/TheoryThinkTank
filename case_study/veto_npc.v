@@ -30,8 +30,12 @@ Local Notation " '<<' c1 , c2 , c3 '>>' " :=
 
 Definition zero_vote := << 0, 0, 0 >>.
 Definition add_votes {n:nat} v1 v2 := @map2 int int int (fun x y => x + y) n v1 v2. 
-Definition fold_votes (vs:list vote) base := List.fold_left add_votes vs base. 
-Definition fold_votes0 (vs:list vote) := List.fold_left add_votes vs zero_vote. 
+
+Fixpoint foldVotes vs (base:vote) :=
+  match vs with
+      |v::vs => add_votes v (foldVotes vs base)
+      |List.nil => base
+  end. 
 
 (*The convention here is that the first position corresponds to the 
 **candidate the manipulators want to win << p, a, b >> *)
@@ -40,7 +44,7 @@ Inductive p_wins : vote -> Prop :=
 
 (*base votes correspond to the non-manipulator votes*)
 Inductive manipulate (base_votes : vote) : Prop := 
-|manipulate_ : forall votes, p_wins (fold_votes votes base_votes ) ->
+|manipulate_ : forall votes, p_wins (foldVotes votes base_votes ) ->
                         manipulate base_votes. 
 
 Fixpoint build_veto_a ks :=
@@ -60,42 +64,26 @@ Definition reduce k := << 0, k*2-1, k*2-1 >>.
 
 Ltac inv H := inversion H; subst; clear H. 
 
-Theorem fold_cons : forall (A:Type) (a:A) b f (z:A), 
-                      List.fold_left f (a::b) z =
-                      List.fold_left f b (f z a). 
-Proof.
-  intros. simpl. auto. 
-Qed. 
-
-Theorem fold0CommCons : forall vs v,
-                          fold_votes0 (v::vs) = add_votes (fold_votes0 vs) v. 
-Proof.
-  induction vs; intros. 
-  {unfold fold_votes0. rewrite fold_cons. unfold List.fold_left. auto. }
-  {unfold fold_votes0 in *. rewrite fold_cons. 
-
-
-
-
 Theorem sum_veto_a : forall l k, sum l = k -> 
-                            fold_votes0 (build_veto_a l) = << k*2, 0, k*2 >>. 
+                            foldVotes (build_veto_a l) zero_vote = << k*2, 0, k*2 >>. 
 Proof.
   induction l; intros. 
   {simpl in *. subst. simpl. reflexivity. }
   {simpl in H. symmetry in H. apply Zplus_minus_eq in H. apply IHl in H.
-   simpl. 
-
-rewrite H. simpl. assert(a*2+(k-a)*2 = k*2). omega. rewrite H0. reflexivity. }
+   simpl. rewrite H. simpl. assert(a*2+(k-a)*2 = k*2). omega. rewrite H0.
+   reflexivity. }
 Qed. 
 
-Theorem sum_veto_b : forall l k, sum l = k -> build_veto_b l = << k*2, k*2, 0 >>. 
+Theorem sum_veto_b : forall l k, sum l = k -> 
+                            foldVotes(build_veto_b l) zero_vote = << k*2, k*2, 0 >>. 
 Proof.
   induction l; intros. 
-  {inv H. simpl. reflexivity. }
+  {inv H. simpl. reflexivity. } 
   {simpl in H. symmetry in H. apply Zplus_minus_eq in H. apply IHl in H.
    simpl. rewrite H. simpl. assert(a*2+(k-a)*2 = k*2). omega. rewrite H0. reflexivity. }
 Qed. 
 
+(*
 Theorem add_veto_a_b : forall l1 l2 l k, Permutation (l1++l2) l -> sum l = k * 2 ->
                                     sum l1 = k -> sum l2 = k -> 
                                     add_votes (build_veto_a l1) (build_veto_b l2) =<< k*4, k*2, k*2 >>. 
@@ -104,15 +92,34 @@ Proof.
   simpl. assert(k*2+k*2 = k*4). omega. rewrite H3. rewrite <- Zplus_0_r_reverse. 
   reflexivity. 
 Qed. 
+*)
+
+Definition shiftout {A} {n:nat} (v:t A (S n)) : t A n :=
+  Eval cbv delta beta in (rectS (fun n _ => t A n) (fun a => @nil A )
+                         (fun h _ _ H => cons _ h _ H) v).
+
+Definition add_votesZero {n:nat} (x:t int (S n)) : t int n :=
+  Eval cbv delta beta in (rectS (fun n _ => t int n) (fun a => @nil int)
+                         (fun h _ _ H => cons _ h _ H) x). 
+
+Theorem _add_votesZero : forall x, add_votes zero_vote x = x. 
+Proof.
+  intros. simpl. apply add_votesZero in x. 
+
+
+
+Theorem foldVotesApp : forall v1 v2 base, 
+                         foldVotes(v1++v2) base = add_votes (foldVotes v1 zero_vote) (foldVotes v2 base). 
+Proof.
+  induction v1; intros. 
+  {replace (foldVotes [] zero_vote) with zero_vote; auto. 
+
 
 Theorem veto_npc : forall l (k:int) vs, reduce k = vs ->
                                  (partition k l <-> manipulate vs). 
 Proof.
   intros. split; intros. 
-  {inversion H0. apply manipulate_ with (votes := (add_votes (build_veto_a l1) 
-                                                            (build_veto_b l2))). 
-   eapply add_veto_a_b in H2; eauto. rewrite H2. subst. constructor. repeat constructor; omega. }
-  {inv H0. 
-
+  {inversion H0. apply manipulate_ with (votes := build_veto_a l1 ++ build_veto_b l2).
+                         
 
 
