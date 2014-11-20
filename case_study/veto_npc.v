@@ -5,7 +5,6 @@ Export ListNotations.
 Require Export hetList. 
 Require Import ZArith.
 Open Scope Z_scope.
-Require Export Coq.Sets.Ensembles. 
 
 (*looks nicer in unicode*)
 Definition int := Z. 
@@ -16,185 +15,130 @@ Fixpoint sum (l : list int) : int :=
       |List.nil => 0
   end. 
 
+(*split L l1 l2: L is composed of l1 and l2*)
+Inductive split : list int -> list int -> list int -> Prop :=
+|splitNil : split nil nil nil
+|splitConsL : forall a1 a2 x b1 b2 c,
+                split (a1++a2) (b1++b2) c ->
+                split (a1++x::a2) (b1++x::b2) c
+|splitConsR : forall a1 a2 x b c1 c2,
+                split (a1++a2) b (c1++c2) ->
+                split (a1++x::a2) b (c1++x::c2). 
+
 Inductive partition (k:int) (l:list int) : Prop :=
-|partition_ : forall (l1 l2 : list int) , sum l = k * 2 -> Permutation (l1++l2) l ->
+|partition_ : forall (l1 l2 : list int) , sum l = k * 2 -> split l l1 l2 ->
                                    sum l1 = k -> sum l2 = k -> partition k l. 
 
-Inductive voteWF : list int -> int -> Prop := 
-|vetoP : forall k, voteWF [0; k; k] k
-|vetaA : forall k, voteWF [k; 0; k] k
-|vetaB : forall k, voteWF [k; k; 0] k. 
+(*triple of integers*)
+Definition vote : Type := prod (prod int int) int. 
 
-Definition vote := list int. 
+Inductive voteWF : vote -> int -> Prop := 
+|vetoP : forall k, voteWF (0,2*k,2*k) k
+|vetaA : forall k, voteWF (2*k,0,2*k) k
+|vetaB : forall k, voteWF (2*k,k,2*0) k. 
 
-Inductive add_votes : vote -> vote -> vote -> Prop :=
-|addNil : add_votes nil nil nil
-|addCons : forall h1 h2 t1 t2 t3,
-             add_votes t1 t2 t3 -> add_votes (h1::t1) (h2::t2) (h1+h2::t3). 
+Definition add_votes v1 v2 :=
+  match v1, v2 with
+      |(a,b,c), (d,e,f) => (a+d,b+e,c+f)
+  end. 
 
-Inductive fold_votes : list vote -> vote -> Prop :=
-|foldSingle : forall v, fold_votes [v] v
-|foldCons : forall hd tl res res', fold_votes tl res -> add_votes hd res res' ->
-                              fold_votes (hd::tl) res'.
+Fixpoint score_votes vs :=
+  match vs with
+      |v::vs => add_votes v (score_votes vs)
+      |nil => (0,0,0)
+  end. 
 
 (*The convention here is that the first position corresponds to the 
 **candidate the manipulators want to win << p, a, b >> *)
 Inductive p_wins : vote -> Prop :=
-|p_wins_ : forall hd tl, Forall (fun x => x <= hd) tl -> p_wins (hd::tl). 
+|p_wins_ : forall p a b, p >= a -> p >= b -> p_wins(p, a, b). 
+
+Inductive mkVote k : vote -> Prop :=
+|veto_p : mkVote k (0, 2*k, 2*k)
+|veto_a : mkVote k (2*k, 0, 2*k)
+|veto_b : mkVote k (2*k, 2*k, 0).
+
+Inductive mkVotes : list int -> list vote -> Prop :=
+|mkVotesNil : mkVotes nil nil
+|mkVotesNonNil : forall k1 k2 v1 v2 k v, 
+                   mkVotes (k1++k2) (v1++v2) -> mkVote k v ->
+                   mkVotes (k1++k::k2) (v1++v::v2). 
 
 (*base votes correspond to the non-manipulator votes, n is the number of candidates*)
-Inductive manipulate (base_votes : vote) votes : Prop := 
-|manipulate_ : forall res, fold_votes (base_votes::votes) res -> p_wins res ->
-                            Forall (fun v => exists k, voteWF v k) votes ->
-                            manipulate base_votes votes. 
+Inductive manipulate (base_votes : vote) (weights : list int) : Prop := 
+|manipulate_ : forall votes, mkVotes weights votes -> 
+                        p_wins (score_votes (base_votes::votes)) ->
+                        manipulate base_votes weights. 
 
-Fixpoint build_veto_a ks :=
-  match ks with
-    |k::ks' => [k*2; 0; k*2]::(build_veto_a ks')
-    |nil => [[0;0;0]]
-  end. 
-
-Fixpoint build_veto_b ks :=
-  match ks with
-    |k::ks' => [k*2; k*2; 0]::(build_veto_b ks')
-    |nil => [[0;0;0]]
-  end. 
-
-Inductive weights : list vote -> list int -> Prop :=
-|nilWeights : weights nil nil
-|consWeights : forall v k vs ks, voteWF v k -> weights vs ks -> 
-                            weights (v::vs) (k::ks). 
-
-Inductive reduce k l : vote -> list vote -> Prop :=
-|reduce_ : forall vs ks, weights vs ks -> Permutation ks l ->
-                    reduce k l [0;k*2-1; k*2-1] vs.
+Definition reduce k (l:list int) := ((0,k*2-1,k*2-1), l). 
 
 Ltac inv H := inversion H; subst; clear H. 
-
-Theorem sum_veto_a : forall l k, sum l = k -> 
-                            fold_votes (build_veto_a l) [k*2; 0; k*2]. 
-Proof.
-  induction l; intros. 
-  {simpl in *. subst. simpl. constructor. }
-  {simpl in H. symmetry in H. apply Zplus_minus_eq in H. apply IHl in H.
-   simpl. econstructor. eauto. assert(k*2=(a*2) + ((k-a)*2)). omega. rewrite H0. 
-   repeat constructor. }
-Qed. 
-
-Theorem sum_veto_b : forall l k, sum l = k -> 
-                            fold_votes (build_veto_b l) [k*2; k*2; 0].
-Proof.
-  induction l; intros. 
-  {simpl in *. subst. simpl. constructor. }
-  {simpl in H. symmetry in H. apply Zplus_minus_eq in H. apply IHl in H.
-   simpl. econstructor. eauto. assert(k*2=(a*2) + ((k-a)*2)). omega. rewrite H0. 
-   repeat constructor. }
-Qed. 
-
-Inductive sub_votes : vote -> vote -> vote -> Prop :=
-|subNil : sub_votes [] [] []
-|subCons : forall (h1 h2 : int) (t1 t2 t3 : vote),
-             sub_votes t1 t2 t3 ->
-             sub_votes (h1 :: t1) (h2 :: t2) (h1 - h2 :: t3).
-
-Ltac invertHyp := 
-  match goal with
-      |H:exists x, ?P |- _ => inv H; try invertHyp
-      |H:?A /\ ?B |- _ => inv H; try invertHyp
-  end. 
 
 Ltac copy H :=
   match type of H with
       |?x => assert(x) by auto
   end. 
 
-Theorem addSub : forall a b c d e, 
-                   add_votes a b c -> add_votes c d e ->
-                   exists res, sub_votes e a res. 
-Proof.
-  intros. genDeps {{ d; e }}. induction H; intros. 
-  {inv H0. repeat econstructor. }
-  {inv H0. apply IHadd_votes in H5. invertHyp. econstructor. 
-   econstructor. eauto. }
-Qed. 
+Ltac invertHyp := 
+  match goal with
+      |H:exists x, ?P |- _ => inv H; try invertHyp 
+      |H:?A /\ ?B |- _ => inv H; try invertHyp
+  end. 
 
-
-Theorem addSub' : forall a res res1 res2 res3 x, 
-                 add_votes a res res1 -> add_votes res1 res2 res3 ->
-                 sub_votes res3 a x -> add_votes res res2 x. 
-Proof.
-  intros. genDeps {{ res2;res3;x }}. induction H; intros.
-  {inv H0. inv H1. constructor. }
-  {inv H0. inv H1. assert(h1+h2+h3-h1 = h2+h3). omega. rewrite H0. 
-   constructor. eauto. }
-Qed. 
-
-Theorem addSubEq : forall a b c, sub_votes a b c -> add_votes c b a.
-Proof.
-  intros. induction H. 
-  {constructor. }
-  {assert((h1-h2)+h2 = h1). omega. rewrite <- H0 at 2. constructor. auto. }
-Qed. 
-
-Theorem add_votes_comm : forall a b c, add_votes a b c -> add_votes b a c. 
-Proof.
-  intros. induction H. 
-  {constructor. }
-  {replace (h1+h2) with (h2+h1). constructor. auto. omega. }
-Qed. 
-
-Theorem fold_votes_app : forall a b res1 res2 res3, 
-                           fold_votes a res1 -> 
-                           fold_votes b res2 ->
-                           add_votes res1 res2 res3 -> 
-                           fold_votes (a++b) res3.
+Theorem sumRemoveMid : forall a b c k, sum (a++b::c) = k -> 
+                                  sum (a++c) = k - b. 
 Proof.
   induction a; intros. 
-  {inv H. }
-  {inv H. 
-   {econstructor. eauto. auto. }
-   {simpl. copy H1. eapply addSub with (a:= a) in H1; eauto. invertHyp. 
-    econstructor. eapply IHa; eauto. eapply addSub'; eauto. 
-    apply add_votes_comm. eapply addSubEq. auto. }
-  }
+  {simpl in *. symmetry in H. apply Zplus_minus_eq in H. auto. }
+  {simpl in *. symmetry in H. apply Zplus_minus_eq in H. eapply IHa in H. 
+   rewrite H. rewrite Z.add_sub_assoc. rewrite Zplus_minus. auto. }
 Qed. 
 
-Theorem ForallApp : forall (A:Type) P (l1 l2 : list A), 
-                      Forall P l1 -> Forall P l2 -> Forall P (l1++l2).
+Theorem scoreVotesRemoveMid : forall vs1 vs2 a b c s1 s2 s3, 
+                                score_votes (vs1++vs2) = (s1-a,s2-b,s3-c) ->
+                                score_votes (vs1++(a,b,c)::vs2) = (s1,s2,s3).
 Proof.
-  induction l1; intros. 
-  {simpl. auto. }
-  {inv H. simpl. constructor; auto. }
+  intros vs1 vs2. induction vs1; intros.  
+  {simpl in *. rewrite H. repeat rewrite Zplus_minus. auto. }
+  {simpl in *. unfold add_votes in *. destruct a. destruct p.  
+   destruct (score_votes (vs1++vs2)). destruct p. inv H.
+   rewrite <- Zeq_plus_swap in H1. rewrite <- Zeq_plus_swap in H2. 
+   rewrite <- Zeq_plus_swap in H3. erewrite IHvs1. 
+   subst. repeat rewrite <- Zplus_assoc. eauto. subst.
+   repeat rewrite Z.add_simpl_r. auto. }
 Qed. 
 
-Theorem build_veto_aWF : forall l, Forall (fun v => exists k, voteWF v k) (build_veto_a l). 
+Theorem mkVotesSum : forall weights l1 l2 k1 k2,
+                       sum l1 = k1 -> sum l2 = k2 -> split weights l1 l2 ->
+                       exists vs, mkVotes weights vs /\ score_votes vs = ((k1+k2)*2, 2*k2, 2*k1). 
 Proof.
-  induction l; intros. 
-  {simpl. repeat econstructor. }
-  {simpl. repeat econstructor. auto. }
+  intros. genDeps {{ k1; k2 }}. induction H1; intros. 
+  {simpl in *. subst. exists nil. simpl. repeat constructor. }
+  {apply sumRemoveMid in H. eapply IHsplit in H; eauto. invertHyp. 
+    assert(exists x1 x2, x0 = x1++x2). exists nil. exists x0. auto. invertHyp. 
+   exists (x1++(2*x,0,2*x)::x2). split. econstructor. auto. constructor. 
+   apply scoreVotesRemoveMid. 
+   assert((k1 + sum c) * 2 - 2*x = (k1 - x + sum c) * 2). omega. rewrite H2. 
+   assert(2*k1 - 2*x = (k1 - x) * 2). omega. rewrite H3.
+   rewrite <- Zminus_0_l_reverse. rewrite (Zmult_comm (k1-x) 2). auto. }
+  {apply sumRemoveMid in H0. eapply IHsplit in H0; eauto. invertHyp. 
+    assert(exists x1 x2, x0 = x1++x2). exists nil. exists x0. auto. invertHyp. 
+   exists (x1++(2*x,2*x,0)::x2). split. econstructor. auto. constructor. 
+   apply scoreVotesRemoveMid. 
+   assert((sum b + k2) * 2 - 2*x = (k2 - x + sum b) * 2). omega. rewrite H2. 
+   assert(2 * k2 - 2 * x = (k2 - x) * 2). omega. rewrite H3.
+   rewrite <- Zminus_0_l_reverse. rewrite (Zmult_comm (k2-x) 2). 
+   rewrite (Zplus_comm _ (sum b)). auto. }
 Qed. 
 
-Theorem build_veto_bWF : forall l, Forall (fun v => exists k, voteWF v k) (build_veto_b l). 
-Proof.
-  induction l; intros. 
-  {simpl. repeat econstructor. }
-  {simpl. repeat econstructor. auto. }
-Qed. 
-
-Theorem veto_npc : forall l (k:int) vs mVs, reduce k l vs mVs ->
-                                     (partition k l <-> manipulate vs mVs). 
+Theorem veto_npc : forall l (k:int) nonManipVote weights,
+                     reduce k l = (nonManipVote, weights) -> sum l = k*2 ->
+                     (partition k l <-> manipulate nonManipVote weights). 
 Proof.
   intros. split; intros. 
-  {inversion H0. apply sum_veto_a in H3. apply sum_veto_b in H4.
-   inv H. eapply manipulate_. 
-   eapply manipulate_ with (votes := build_veto_a l1 ++ build_veto_b l2).
-   econstructor. eapply fold_votes_app; eauto. repeat econstructor. 
-   unfold reduce in H. subst. repeat constructor. constructor. 
-   repeat constructor; omega. apply ForallApp. apply build_veto_aWF. 
-   apply build_veto_bWF. }
-  {inv H0. 
-
-
+  {unfold reduce in H. inv H. inversion H1. eapply mkVotesSum in H2; eauto. 
+   invertHyp. econstructor. eauto. simpl. rewrite H3. constructor; omega. }
+  {unfold reduce in *. inv H. inv H1. 
 
 
 
