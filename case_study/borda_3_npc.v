@@ -47,7 +47,7 @@ Fixpoint score_votes vs :=
 (*The convention here is that the first position corresponds to the 
 **candidate the manipulators want to win << p, a, b >> *)
 Inductive p_wins : vote -> Prop :=
-|p_wins_ : forall p a b, p >= a -> p >= b -> p_wins(p, a, b). 
+|p_wins_ : forall p a b, p > a -> p > b -> p_wins(p, a, b). 
 
 (*make a vote of weight 6k*)
 Inductive mkVote k : vote -> Prop :=
@@ -139,65 +139,46 @@ Proof.
   repeat (rewrite <- Z.add_sub_assoc; rewrite Zplus_minus). auto. 
 Qed. 
 
-Theorem mustBe4K : forall weights k votes s1 s2 s3, 
+Definition multOf x k := exists y, y * k = x. 
+
+Theorem mustBe24K : forall weights k votes s1 s2 s3, 
                  sum weights = k  ->
                  mkVotes weights votes -> 
                  score_votes votes = (s1,s2,s3) -> 
-                 s1 = k * 12 /\ s2 + s3 = s1. 
+                 s1  = k * 12 /\ (s2 + s3) * 2 = s1 /\ multOf s2 6 /\ multOf s3 6. 
 Proof.
   intros. genDeps {{ k; s1; s2; s3 }}. induction H0; intros. 
-  {simpl in *. inv H1. auto. }
+  {simpl in *. inv H1. split; auto. split; auto. unfold multOf.
+   split; exists 0; auto. }
   {simpl in *. symmetry in H2. apply Zplus_minus_eq in H2. inv H.
-   {apply add_votesSub in H1. eapply IHmkVotes in H1; eauto. 
-    invertHyp. split. omega. 
-omega. }
-   {apply add_votesSub in H1. eapply IHmkVotes in H1; eauto. omega. }
+   {apply add_votesSub in H1. eapply IHmkVotes in H1; eauto. invertHyp. 
+    unfold multOf in *. invertHyp. split. omega. split. omega. split. 
+    exists (x0+k). omega. exists x. omega. }
+   {apply add_votesSub in H1. eapply IHmkVotes in H1; eauto. split. omega. split. 
+    omega. unfold multOf in *. invertHyp. split. exists x0. omega. exists (x+k). omega. }
   }
 Qed. 
 
-Definition even x := exists k, k * 2 = x. 
-
-Theorem sumScoresEven : forall weights votes k s1 s2, 
-                 mkVotes weights votes -> 
-                 score_votes votes = (k * 2, s1, s2) -> 
-                 s1 + s2 = k*2 /\ even s1 /\ even s2. 
-Proof.
-  intros. genDeps {{ k; s1; s2 }}. induction H; intros. 
-  {simpl in *. inv H0. auto. unfold even. split. auto. split; eauto. }
-  {simpl in H1. inv H0. 
-   {apply add_votesSub in H1. assert(k0*2-k*2 = (k0-k)*2). omega.
-    rewrite H0 in H1. eapply IHmkVotes in H1. split. omega. invertHyp. 
-    unfold even in *. invertHyp. split. rewrite <- Zminus_0_l_reverse in H4. 
-    subst. exists x0. auto. assert(s2 = (x+k) * 2). omega. rewrite H1. 
-    exists (x+k). auto. }
-   {apply add_votesSub in H1. assert(k0*2-k*2 = (k0-k)*2). omega.
-    rewrite H0 in H1. eapply IHmkVotes in H1. split. omega. 
-    invertHyp. rewrite <- Zminus_0_l_reverse in H4. unfold even in *. 
-    invertHyp. split. rewrite <- Zminus_0_l_reverse in H2. 
-    assert(s1 = (k0-x) * 2). omega. rewrite H1. eauto. eauto. }
-  }
-Qed. 
+Ltac solveByInv := 
+  match goal with
+      |H:_ |- _ => solve[inv H]
+  end. 
 
 Theorem weightsToVotes : forall votes weights s1 s2 s3, 
                   mkVotes weights votes ->
                   score_votes votes = (s1,s2,s3) ->
-                  exists l1 l2, split weights l1 l2 /\ sum l1 * 2 = s2 /\ sum l2 * 2= s3. 
+                  exists l1 l2, split weights l1 l2 /\ sum l1 * 6 = s2 /\ sum l2 * 6 = s3. 
 Proof.
   intros. genDeps {{ s1; s2; s3 }}. induction H; intros. 
   {simpl in H0. inv H0. exists nil. exists nil. split. constructor. auto. }
   {simpl in H1. inv H0. 
    {apply add_votesSub in H1. eapply IHmkVotes in H1. invertHyp. 
-    exists x. exists (nil++k::x0). split. constructor. simpl. auto. simpl. 
-    split; omega. }
-   {apply add_votesSub in H1. eapply IHmkVotes in H1. invertHyp. 
     exists (nil++k::x). exists x0. split. constructor. simpl. auto. simpl. 
     split; omega. }
+   {apply add_votesSub in H1. eapply IHmkVotes in H1. invertHyp. 
+     exists x. exists (nil++k::x0). split. constructor. simpl. auto. simpl. 
+    split; omega. }
   }
-Qed. 
-
-Theorem cancel : forall x y, x + x = y + y -> x = y. 
-Proof.
-  induction x; intros; omega. 
 Qed. 
 
 Theorem veto_npc : forall l k nonManipVote weights,
@@ -210,19 +191,15 @@ Proof.
   {unfold reduce in *. inv H. inv H1.  
    assert(exists s1 s2 s3, score_votes votes = (s1,s2,s3)). apply score_votes_total. 
    invertHyp. simpl in H2. rewrite H3 in H2. inv H2. copy H0. 
-   eapply mustBe4K in H1; eauto. invertHyp. rewrite <- H4 in H5. 
-   rewrite <- H4 in H7. clear H4. assert(x1 >= k * 2 - 1). omega.
-   assert(x0 >= k * 2 - 1). omega. copy H. eapply sumScoresEven in H; eauto. invertHyp.
-   assert(x0=k*2 /\ x1=k*2). symmetry in H6. apply Zplus_minus_eq in H6. 
-   rewrite H6 in H1. assert(x0 <= 2*k+1). omega.  
-   assert(x1 <= 2*k+1). omega. assert(x0=k*2-1 \/ x0=k*2 \/ x0=k*2+1). omega. 
-   assert(x1=k*2-1 \/ x1=k*2 \/ x1=k*2+1). omega. unfold even in *. invertHyp.  
-   inv H12; inv H11; omega. invertHyp. eapply weightsToVotes in H4; eauto. 
-   invertHyp. repeat  rewrite <- Zred_factor1 in *. econstructor; eauto. 
-   rewrite H0. rewrite Zred_factor1. auto. apply cancel in H4. auto. 
-   apply cancel in H11. auto. 
-  }
+   eapply mustBe24K in H1; eauto. invertHyp. unfold multOf in *. invertHyp.  
+   assert(x1 <= k). omega. assert(x <= k). omega. rewrite <- Z.mul_assoc in H1. 
+   simpl in H1. assert((x1+x) = k * 2). omega. assert(x1=k /\ x=k). omega. invertHyp.
+   eapply weightsToVotes in H; eauto. invertHyp. econstructor; eauto. 
+   erewrite Z.mul_cancel_r in H; auto.  omega. erewrite Z.mul_cancel_r in H10; auto. 
+   omega. }
 Qed. 
+
+
 
 
 
