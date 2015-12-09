@@ -114,7 +114,9 @@ Definition getVar a :=
 Inductive convFormula (c:vvar) : list (bvar * vvar * vvar * vvar) -> list bvar ->
                         (atom * atom * atom) -> graph -> Prop := 
 |conv'' : forall Gamma Delta u1 u2 u3 G e1 e2 e3 p1 p2 p3 D1 D2 D3 D4, 
-            In (u1,3*u1,3*u1+1,3*u1+2) Gamma -> In (u2,3*u2,3*u2+1,3*u2+2) Gamma -> In (u3,3*u3,3*u3+1,3*u3+2) Gamma ->
+            In (u1,3*u1,3*u1+1,3*u1+2) Gamma ->
+            In (u2,3*u2,3*u2+1,3*u2+2) Gamma ->
+            In (u3,3*u3,3*u3+1,3*u3+2) Gamma ->
             convert_base Gamma (D1++D2++D3++D4) c G -> 
             mkEdge c p1 (3*u1) (3*u1+1) e1 -> getVar p1 = u1 -> getVar p2 = u2 -> getVar p3 = u3 ->
             mkEdge c p2 (3*u2) (3*u2+1) e2 ->
@@ -132,21 +134,37 @@ Inductive convStack (i:vvar) : list (bvar * vvar * vvar * vvar) -> list bvar ->
 .
 
 (*Top Level Reduction (Gamma; Delta |- F => C C' G)*)
-Inductive reduce Gamma Delta : bformula -> nat -> graph -> Prop :=
-|convV : forall F G1 G2 G3 C,
+Inductive reduce Gamma Delta : bformula -> graph -> Prop :=
+|convV : forall F G1 G2 G3,
          convStack (length Gamma * 3) Gamma Delta F G1 ->
          clique Gamma Delta G2 -> vars_to_clique Gamma Delta G3 ->
-         reduce Gamma Delta F C (gunion G1 (gunion G2 G3)).
+         reduce Gamma Delta F (gunion G1 (gunion G2 G3)).
 
+Fixpoint buildCtxt i :=
+  match i with
+    |0 => (nil, nil)
+    |S i =>
+     let (Gamma, Delta) := buildCtxt i
+     in (((i,3*i,3*i+1,3*i+2)::Gamma), (i::Delta))
+  end.
+
+(*
+Inductive buildCtxt : nat -> list (bvar*vvar*vvar*vvar) -> list bvar -> Prop :=
+|buildCons : forall Gamma Delta i, buildCtxt i Gamma Delta -> 
+                                     buildCtxt (S i) ((i,3*i,3*i+1,3*i+2)::Gamma) (i::Delta)
+|buildNil : buildCtxt 0 nil nil. 
+*)
+(*
 (*Build the Gamma and Delta contexts (n is the number of boolean variables in the formula we are reducing)*)
 Inductive buildCtxt n : nat -> list (bvar*vvar*vvar*vvar) -> list bvar -> Prop :=
 |buildCons : forall Gamma Delta i, buildCtxt n (S i) Gamma Delta -> 
                         buildCtxt n i ((i,3*i,3*i+1,3*i+2)::Gamma) (i::Delta)
 |buildNil : buildCtxt n n nil nil. 
+ *)
 
-Theorem buildCtxtSanityChk : buildCtxt 3 0 [(0,0,1,2);(1,3,4,5);(2,6,7,8)] [0;1;2].
+Theorem buildCtxtSanityChk : buildCtxt 3 = ([(2,6,7,8);(1,3,4,5);(0,0,1,2)], [2; 1; 0]). 
 Proof.
-  repeat constructor. 
+  simpl. reflexivity.
 Qed. 
 
 Hint Constructors coloring. 
@@ -166,7 +184,7 @@ Inductive unique {A:Type} (U:Ensemble A) : list A -> Prop :=
 |uniqueCons : forall hd tl, unique (Add A U hd) tl -> ~ Ensembles.In _ U hd ->
                        unique U (hd::tl)
 |uniqueNil : unique U nil.
-
+  
 (*specifies that an atom is satisfiable, and gives back the appropriate color and 
 **variable for setting the graph coloring environment*)
 Inductive winner eta' eta : atom -> bvar -> colors -> Prop :=
@@ -216,10 +234,11 @@ Qed.
 **for this, but thats what they call it in the paper)*)
 Inductive valid : list (bvar*vvar*vvar*vvar) -> nat -> bformula -> 
                   list (vvar * colors) -> list (bvar * bool) -> Prop :=
-|valid_ : forall Gamma C eta eta' eta'' F res, setVertices Gamma C 0 eta' eta -> 
-                          setCs eta' (3 * length Gamma) F eta'' eta ->
-                          res = eta' ++ eta'' -> 
-                          valid Gamma C F res eta. 
+|valid_ : forall Gamma C eta eta' eta'' F res,
+            setVertices Gamma C 0 eta' eta -> 
+            setCs eta' (3 * length Gamma) F eta'' eta ->
+            res = eta' ++ eta'' -> 
+            valid Gamma C F res eta. 
 
 Theorem sanityCheck' : 
   valid [(0,0,1,2);(1,3,4,5);(2,6,7,8)]
